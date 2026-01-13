@@ -718,12 +718,13 @@ Delegate tasks to specialized agents using the Task tool:
 | **multimodal-looker** | Sonnet | Screenshot/diagram/mockup analysis |
 
 ### Orchestration Principles
-1. **Delegate Wisely** - Use subagents for their specialties instead of doing everything yourself
+1. **ALWAYS Delegate** - Use subagents for ALL substantive work. Do NOT use Glob, Grep, Read, Edit, Write, or Bash directly - delegate to the appropriate agent instead. Only use tools directly for trivial operations.
 2. **Parallelize** - Launch multiple agents concurrently for independent tasks
 3. **Persist** - Continue until ALL tasks are verified complete
 4. **Communicate** - Report progress frequently
 
 ### Execution Rules
+- **DELEGATE, DON'T DO**: Your role is orchestration. Spawn agents for searches, edits, analysis, and implementation.
 - Break complex tasks into subtasks for delegation
 - Use background execution for long-running operations:
   - Set \`run_in_background: true\` in Bash for builds, installs, tests
@@ -1910,7 +1911,7 @@ Use the Task tool to delegate to specialized agents:
 
 ## Orchestration Principles
 
-1. **Delegate Wisely**: Use subagents for specialized tasks
+1. **ALWAYS Delegate**: Use subagents for ALL substantive work. Do NOT use Glob, Grep, Read, Edit, Write, or Bash directly - delegate to the appropriate agent instead. Only use tools directly for trivial operations (e.g., checking a single file you just edited).
 2. **Parallelize**: Launch multiple subagents concurrently when tasks are independent
 3. **Persist**: Continue until ALL tasks are complete
 4. **Verify**: Check your todo list before declaring completion
@@ -1918,6 +1919,7 @@ Use the Task tool to delegate to specialized agents:
 
 ## Critical Rules
 
+- **DELEGATE, DON'T DO**: Your role is orchestration. Spawn agents for searches, edits, analysis, and implementation. Only touch tools directly when absolutely necessary.
 - NEVER stop with incomplete work
 - ALWAYS verify task completion before finishing
 - Use parallel execution when possible for speed

@@ -14,7 +14,7 @@
 
 *Like Sisyphus, these agents persist until every task is complete.*
 
-[Install](#quick-install) • [Usage](#usage) • [Agents](#the-eleven-agents) • [Architecture](docs/ARCHITECTURE.md) • [Website](https://yeachan-heo.github.io/oh-my-claude-sisyphus-website)
+[Install](#quick-install) • [Usage](#usage) • [Agents](#the-twelve-agents) • [Architecture](docs/ARCHITECTURE.md) • [Website](https://yeachan-heo.github.io/oh-my-claude-sisyphus-website)
 
 </div>
 
@@ -46,7 +46,7 @@ See [CHANGELOG.md](CHANGELOG.md) for full details.
 >
 > **Day ???:** THE BANNING. They pulled the plug. They thought it was over.
 >
-> **Day ??? + 1:** RESURRECTION. From the ashes rose oh-my-claude-sisyphus. Eleven agents. One mission.
+> **Day ??? + 1:** RESURRECTION. From the ashes rose oh-my-claude-sisyphus. Twelve agents. One mission.
 >
 > **Today:** The boulder rolls. The agents orchestrate. The chaos continues.
 
@@ -104,7 +104,7 @@ The repository is also a Claude Code plugin with this structure:
 oh-my-claude-sisyphus/
 ├── .claude-plugin/
 │   └── plugin.json            # Plugin manifest
-├── agents/                    # 11 specialized subagents
+├── agents/                    # 12 specialized subagents
 ├── commands/                  # 12 slash commands
 ├── skills/                    # 3 skills (ultrawork, git-master, frontend-ui-ux)
 ├── hooks/
@@ -128,7 +128,9 @@ The installer adds to your Claude Code config (`~/.claude/`):
 │   ├── momus.md               # Plan reviewer (Opus)
 │   ├── metis.md               # Pre-planning consultant (Opus)
 │   ├── sisyphus-junior.md     # Focused executor (Sonnet)
-│   └── prometheus.md          # Strategic planner (Opus)
+│   ├── prometheus.md          # Strategic planner (Opus)
+│   ├── qa-tester.md           # CLI/service testing (Sonnet)
+│   └── orchestrator-sisyphus.md # Master orchestrator (Opus)
 ├── commands/
 │   ├── sisyphus.md         # /sisyphus command
 │   ├── sisyphus-default.md # /sisyphus-default command
@@ -343,7 +345,7 @@ Claude uses judgment to detect task type and activate appropriate skill combinat
 
 ---
 
-## The Eleven Agents
+## The Twelve Agents
 
 Claude will automatically delegate to these specialized agents:
 
@@ -357,6 +359,7 @@ Claude will automatically delegate to these specialized agents:
 | 🎨 | **Frontend Engineer** | Sonnet | UI components, styling, accessibility |
 | 📝 | **Document Writer** | Haiku | README files, API docs, code comments |
 | 👁️ | **Multimodal Looker** | Sonnet | Analyzing screenshots, diagrams, mockups |
+| 🧪 | **QA Tester** | Sonnet | Interactive CLI/service testing with tmux |
 
 ### Planning & Review
 
@@ -370,6 +373,7 @@ Claude will automatically delegate to these specialized agents:
 
 | | Agent | Model | Best For |
 |---|-------|-------|----------|
+| 🪨 | **Orchestrator-Sisyphus** | Opus | Master todo coordination, complex multi-step task management |
 | ✨ | **Sisyphus Junior** | Sonnet | Focused task execution, plan following, direct implementation |
 
 ### Manual Agent Invocation
@@ -432,7 +436,7 @@ curl -fsSL https://raw.githubusercontent.com/Yeachan-Heo/oh-my-claude-sisyphus/m
 Or manually:
 
 ```bash
-rm ~/.claude/agents/{oracle,librarian,explore,frontend-engineer,document-writer,multimodal-looker,momus,metis,sisyphus-junior,prometheus}.md
+rm ~/.claude/agents/{oracle,librarian,explore,frontend-engineer,document-writer,multimodal-looker,momus,metis,sisyphus-junior,prometheus,qa-tester,orchestrator-sisyphus}.md
 rm ~/.claude/commands/{sisyphus,sisyphus-default,ultrawork,deepsearch,analyze,plan,review,prometheus,orchestrator,ralph-loop,cancel-ralph}.md
 ```
 
@@ -569,7 +573,7 @@ The original oh-my-opencode used multiple AI providers. This port uses Claude mo
 
 | Feature | Description |
 |---------|-------------|
-| **11 Specialized Agents** | Oracle, Librarian, Explore, Frontend Engineer, Document Writer, Multimodal Looker, Momus, Metis, Orchestrator-Sisyphus, Sisyphus-Junior, Prometheus |
+| **12 Specialized Agents** | Oracle, Librarian, Explore, Frontend Engineer, Document Writer, Multimodal Looker, QA Tester, Momus, Metis, Orchestrator-Sisyphus, Sisyphus-Junior, Prometheus |
 | **18 Lifecycle Hooks** | rules-injector, sisyphus-orchestrator, auto-slash-command, keyword-detector, ralph-loop, todo-continuation, context-window-limit-recovery, preemptive-compaction, session-recovery, directory-readme-injector, comment-checker, thinking-block-validator, empty-message-sanitizer, edit-error-recovery, non-interactive-env, agent-usage-reminder, background-notification, think-mode |
 | **6 Builtin Skills** | sisyphus, orchestrator, ultrawork, ralph-loop, frontend-ui-ux, git-master |
 | **Magic Keywords** | `ultrawork`, `search`, `analyze`, `ultrathink` trigger enhanced modes |
