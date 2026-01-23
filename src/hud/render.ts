@@ -10,10 +10,10 @@ import { renderRalph } from './elements/ralph.js';
 import { renderAgentsByFormat, renderAgentsMultiLine } from './elements/agents.js';
 import { renderTodosWithCurrent } from './elements/todos.js';
 import { renderSkills, renderLastSkill } from './elements/skills.js';
-import { renderContext } from './elements/context.js';
+import { renderContext, renderContextWithBar } from './elements/context.js';
 import { renderBackground } from './elements/background.js';
 import { renderPrd } from './elements/prd.js';
-import { renderRateLimits } from './elements/limits.js';
+import { renderRateLimits, renderRateLimitsWithBar } from './elements/limits.js';
 import { renderPermission } from './elements/permission.js';
 import { renderThinking } from './elements/thinking.js';
 import { renderSession } from './elements/session.js';
@@ -34,7 +34,9 @@ export function render(context: HudRenderContext, config: HudConfig): string {
 
   // Rate limits (5h and weekly)
   if (enabledElements.rateLimits && context.rateLimits) {
-    const limits = renderRateLimits(context.rateLimits);
+    const limits = enabledElements.useBars
+      ? renderRateLimitsWithBar(context.rateLimits)
+      : renderRateLimits(context.rateLimits);
     if (limits) elements.push(limits);
   }
 
@@ -92,7 +94,9 @@ export function render(context: HudRenderContext, config: HudConfig): string {
 
   // Context window
   if (enabledElements.contextBar) {
-    const ctx = renderContext(context.contextPercent, config.thresholds);
+    const ctx = enabledElements.useBars
+      ? renderContextWithBar(context.contextPercent, config.thresholds)
+      : renderContext(context.contextPercent, config.thresholds);
     if (ctx) elements.push(ctx);
   }
 
