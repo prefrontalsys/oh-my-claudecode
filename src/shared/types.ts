@@ -10,6 +10,7 @@ export interface AgentConfig {
   prompt: string;
   tools: string[];
   model?: ModelType;
+  defaultModel?: ModelType;
 }
 
 export interface PluginConfig {

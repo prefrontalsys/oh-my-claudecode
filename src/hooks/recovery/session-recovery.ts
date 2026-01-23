@@ -1,20 +1,11 @@
 /**
- * Session Recovery Hook
+ * Session Recovery
  *
  * Helps recover session state when Claude Code restarts or crashes.
  * Detects and fixes various error conditions that can cause session failures.
- *
- * Adapted from oh-my-opencode's session-recovery hook for Claude Code's
- * shell hook system.
- *
- * Recovery Strategies:
- * 1. Tool Result Missing: Inject cancelled tool results for orphaned tool_use
- * 2. Thinking Block Order: Fix messages where thinking isn't first
- * 3. Thinking Disabled: Strip thinking blocks when model doesn't support them
- * 4. Empty Content: Add placeholder text to empty messages
  */
 
-import { appendFileSync } from "node:fs";
+import { appendFileSync } from 'node:fs';
 import {
   findEmptyMessages,
   findEmptyMessageByIndex,
@@ -28,19 +19,28 @@ import {
   readParts,
   replaceEmptyTextParts,
   stripThinkingParts,
-} from "./storage.js";
-import type {
-  MessageData,
-  RecoveryErrorType,
-  RecoveryResult,
-  SessionRecoveryConfig,
-} from "./types.js";
+} from './storage.js';
 import {
   DEBUG,
-  DEBUG_LOG_PATH,
+  DEBUG_FILE,
   PLACEHOLDER_TEXT,
   RECOVERY_MESSAGES,
-} from "./constants.js";
+} from './constants.js';
+import type {
+  MessageData,
+  RecoveryResult,
+  RecoveryConfig,
+} from './types.js';
+
+/**
+ * Recovery error types
+ */
+export type RecoveryErrorType =
+  | 'tool_result_missing'
+  | 'thinking_block_order'
+  | 'thinking_disabled_violation'
+  | 'empty_content'
+  | null;
 
 /**
  * Debug logging utility
@@ -48,9 +48,9 @@ import {
 function debugLog(...args: unknown[]): void {
   if (DEBUG) {
     const msg = `[${new Date().toISOString()}] [session-recovery] ${args
-      .map((a) => (typeof a === "object" ? JSON.stringify(a, null, 2) : String(a)))
-      .join(" ")}\n`;
-    appendFileSync(DEBUG_LOG_PATH, msg);
+      .map((a) => (typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)))
+      .join(' ')}\n`;
+    appendFileSync(DEBUG_FILE, msg);
   }
 }
 
@@ -58,8 +58,8 @@ function debugLog(...args: unknown[]): void {
  * Extract error message from various error formats
  */
 function getErrorMessage(error: unknown): string {
-  if (!error) return "";
-  if (typeof error === "string") return error.toLowerCase();
+  if (!error) return '';
+  if (typeof error === 'string') return error.toLowerCase();
 
   const errorObj = error as Record<string, unknown>;
   const paths = [
@@ -70,9 +70,9 @@ function getErrorMessage(error: unknown): string {
   ];
 
   for (const obj of paths) {
-    if (obj && typeof obj === "object") {
+    if (obj && typeof obj === 'object') {
       const msg = (obj as Record<string, unknown>).message;
-      if (typeof msg === "string" && msg.length > 0) {
+      if (typeof msg === 'string' && msg.length > 0) {
         return msg.toLowerCase();
       }
     }
@@ -81,7 +81,7 @@ function getErrorMessage(error: unknown): string {
   try {
     return JSON.stringify(error).toLowerCase();
   } catch {
-    return "";
+    return '';
   }
 }
 
@@ -100,31 +100,31 @@ function extractMessageIndex(error: unknown): number | null {
 export function detectErrorType(error: unknown): RecoveryErrorType {
   const message = getErrorMessage(error);
 
-  if (message.includes("tool_use") && message.includes("tool_result")) {
-    return "tool_result_missing";
+  if (message.includes('tool_use') && message.includes('tool_result')) {
+    return 'tool_result_missing';
   }
 
   if (
-    message.includes("thinking") &&
-    (message.includes("first block") ||
-      message.includes("must start with") ||
-      message.includes("preceeding") ||
-      message.includes("final block") ||
-      message.includes("cannot be thinking") ||
-      (message.includes("expected") && message.includes("found")))
+    message.includes('thinking') &&
+    (message.includes('first block') ||
+      message.includes('must start with') ||
+      message.includes('preceeding') ||
+      message.includes('final block') ||
+      message.includes('cannot be thinking') ||
+      (message.includes('expected') && message.includes('found')))
   ) {
-    return "thinking_block_order";
+    return 'thinking_block_order';
   }
 
-  if (message.includes("thinking is disabled") && message.includes("cannot contain")) {
-    return "thinking_disabled_violation";
+  if (message.includes('thinking is disabled') && message.includes('cannot contain')) {
+    return 'thinking_disabled_violation';
   }
 
   if (
-    message.includes("empty") &&
-    (message.includes("content") || message.includes("message"))
+    message.includes('empty') &&
+    (message.includes('content') || message.includes('message'))
   ) {
-    return "empty_content";
+    return 'empty_content';
   }
 
   return null;
@@ -144,7 +144,7 @@ function extractToolUseIds(
   parts: Array<{ type: string; id?: string; callID?: string }>
 ): string[] {
   return parts
-    .filter((p) => p.type === "tool_use" && !!p.id)
+    .filter((p) => p.type === 'tool_use' && !!p.id)
     .map((p) => p.id!);
 }
 
@@ -155,18 +155,18 @@ async function recoverToolResultMissing(
   sessionID: string,
   failedAssistantMsg: MessageData
 ): Promise<boolean> {
-  debugLog("recoverToolResultMissing", { sessionID, msgId: failedAssistantMsg.info?.id });
+  debugLog('recoverToolResultMissing', { sessionID, msgId: failedAssistantMsg.info?.id });
 
   // Try API parts first, fallback to filesystem if empty
   let parts = failedAssistantMsg.parts || [];
   if (parts.length === 0 && failedAssistantMsg.info?.id) {
     const storedParts = readParts(failedAssistantMsg.info.id);
     parts = storedParts.map((p) => ({
-      type: p.type === "tool" ? "tool_use" : p.type,
-      id: "callID" in p ? (p as { callID?: string }).callID : p.id,
-      name: "tool" in p ? (p as { tool?: string }).tool : undefined,
+      type: p.type === 'tool' ? 'tool_use' : p.type,
+      id: 'callID' in p ? (p as { callID?: string }).callID : p.id,
+      name: 'tool' in p ? (p as { tool?: string }).tool : undefined,
       input:
-        "state" in p
+        'state' in p
           ? (p as { state?: { input?: Record<string, unknown> } }).state?.input
           : undefined,
     }));
@@ -175,11 +175,11 @@ async function recoverToolResultMissing(
   const toolUseIds = extractToolUseIds(parts);
 
   if (toolUseIds.length === 0) {
-    debugLog("No tool_use IDs found");
+    debugLog('No tool_use IDs found');
     return false;
   }
 
-  debugLog("Found tool_use IDs to inject results for", toolUseIds);
+  debugLog('Found tool_use IDs to inject results for', toolUseIds);
 
   // Note: In Claude Code's simplified architecture, we would need to
   // integrate with the actual session/tool system to inject tool results.
@@ -197,13 +197,13 @@ async function recoverThinkingBlockOrder(
   _failedAssistantMsg: MessageData,
   error: unknown
 ): Promise<boolean> {
-  debugLog("recoverThinkingBlockOrder", { sessionID });
+  debugLog('recoverThinkingBlockOrder', { sessionID });
 
   const targetIndex = extractMessageIndex(error);
   if (targetIndex !== null) {
     const targetMessageID = findMessageByIndexNeedingThinking(sessionID, targetIndex);
     if (targetMessageID) {
-      debugLog("Found target message by index", { targetIndex, targetMessageID });
+      debugLog('Found target message by index', { targetIndex, targetMessageID });
       return prependThinkingPart(sessionID, targetMessageID);
     }
   }
@@ -211,11 +211,11 @@ async function recoverThinkingBlockOrder(
   const orphanMessages = findMessagesWithOrphanThinking(sessionID);
 
   if (orphanMessages.length === 0) {
-    debugLog("No orphan thinking messages found");
+    debugLog('No orphan thinking messages found');
     return false;
   }
 
-  debugLog("Found orphan thinking messages", orphanMessages);
+  debugLog('Found orphan thinking messages', orphanMessages);
 
   let anySuccess = false;
   for (const messageID of orphanMessages) {
@@ -234,16 +234,16 @@ async function recoverThinkingDisabledViolation(
   sessionID: string,
   _failedAssistantMsg: MessageData
 ): Promise<boolean> {
-  debugLog("recoverThinkingDisabledViolation", { sessionID });
+  debugLog('recoverThinkingDisabledViolation', { sessionID });
 
   const messagesWithThinking = findMessagesWithThinkingBlocks(sessionID);
 
   if (messagesWithThinking.length === 0) {
-    debugLog("No messages with thinking blocks found");
+    debugLog('No messages with thinking blocks found');
     return false;
   }
 
-  debugLog("Found messages with thinking blocks", messagesWithThinking);
+  debugLog('Found messages with thinking blocks', messagesWithThinking);
 
   let anySuccess = false;
   for (const messageID of messagesWithThinking) {
@@ -263,7 +263,7 @@ async function recoverEmptyContentMessage(
   failedAssistantMsg: MessageData,
   error: unknown
 ): Promise<boolean> {
-  debugLog("recoverEmptyContentMessage", { sessionID });
+  debugLog('recoverEmptyContentMessage', { sessionID });
 
   const targetIndex = extractMessageIndex(error);
   const failedID = failedAssistantMsg.info?.id;
@@ -329,43 +329,44 @@ export async function handleSessionRecovery(
   sessionID: string,
   error: unknown,
   failedMessage?: MessageData,
-  config?: SessionRecoveryConfig
+  config?: RecoveryConfig
 ): Promise<RecoveryResult> {
-  debugLog("handleSessionRecovery", { sessionID, error });
+  debugLog('handleSessionRecovery', { sessionID, error });
 
   const errorType = detectErrorType(error);
   if (!errorType) {
-    debugLog("Not a recoverable error");
+    debugLog('Not a recoverable error');
     return {
       attempted: false,
       success: false,
     };
   }
 
-  debugLog("Detected recoverable error type", errorType);
+  debugLog('Detected recoverable error type', errorType);
 
   try {
     let success = false;
     const failedMsg = failedMessage || { info: {}, parts: [] };
 
     switch (errorType) {
-      case "tool_result_missing":
+      case 'tool_result_missing':
         success = await recoverToolResultMissing(sessionID, failedMsg);
         break;
-      case "thinking_block_order":
+      case 'thinking_block_order':
         success = await recoverThinkingBlockOrder(sessionID, failedMsg, error);
         break;
-      case "thinking_disabled_violation":
+      case 'thinking_disabled_violation':
         success = await recoverThinkingDisabledViolation(sessionID, failedMsg);
         break;
-      case "empty_content":
+      case 'empty_content':
         success = await recoverEmptyContentMessage(sessionID, failedMsg, error);
         break;
     }
 
-    debugLog("Recovery result", { errorType, success });
+    debugLog('Recovery result', { errorType, success });
 
-    const recoveryMessage = config?.customMessages?.[errorType] ||
+    const recoveryMessage =
+      config?.customMessages?.[errorType] ||
       RECOVERY_MESSAGES[errorType]?.message ||
       `Session recovery attempted for ${errorType}`;
 
@@ -376,7 +377,7 @@ export async function handleSessionRecovery(
       errorType,
     };
   } catch (err) {
-    debugLog("Recovery failed with error", err);
+    debugLog('Recovery failed with error', err);
     return {
       attempted: true,
       success: false,
@@ -384,69 +385,3 @@ export async function handleSessionRecovery(
     };
   }
 }
-
-/**
- * Create session recovery hook for Claude Code
- */
-export function createSessionRecoveryHook(config?: SessionRecoveryConfig) {
-  debugLog("createSessionRecoveryHook", { config });
-
-  return {
-    /**
-     * Check for errors during tool execution or message processing
-     */
-    onError: async (input: {
-      session_id: string;
-      error: unknown;
-      message?: MessageData;
-    }): Promise<RecoveryResult> => {
-      return handleSessionRecovery(
-        input.session_id,
-        input.error,
-        input.message,
-        config
-      );
-    },
-
-    /**
-     * Check if an error is recoverable
-     */
-    isRecoverable: (error: unknown): boolean => {
-      return isRecoverableError(error);
-    },
-
-    /**
-     * Get recovery message for an error type
-     */
-    getRecoveryMessage: (errorType: RecoveryErrorType): string | undefined => {
-      if (!errorType) return undefined;
-      return config?.customMessages?.[errorType] ||
-        RECOVERY_MESSAGES[errorType]?.message;
-    },
-  };
-}
-
-// Re-export types and utilities
-export type {
-  MessageData,
-  RecoveryErrorType,
-  RecoveryResult,
-  SessionRecoveryConfig,
-  StoredMessageMeta,
-  StoredPart,
-  StoredTextPart,
-  StoredToolPart,
-} from "./types.js";
-
-export {
-  RECOVERY_MESSAGES,
-  PLACEHOLDER_TEXT,
-} from "./constants.js";
-
-export {
-  findEmptyMessages,
-  findMessagesWithThinkingBlocks,
-  findMessagesWithOrphanThinking,
-  readMessages,
-  readParts,
-} from "./storage.js";

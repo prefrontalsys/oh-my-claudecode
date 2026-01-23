@@ -305,9 +305,9 @@ describe('Installer Constants', () => {
 
       // Verify backward compatibility section exists
       expect(CLAUDE_MD_CONTENT).toContain('All old commands still work');
-      expect(CLAUDE_MD_CONTENT).toContain('/ralph');
-      expect(CLAUDE_MD_CONTENT).toContain('/ultrawork');
-      expect(CLAUDE_MD_CONTENT).toContain('/planner');
+      expect(CLAUDE_MD_CONTENT).toContain('/oh-my-claudecode:ralph');
+      expect(CLAUDE_MD_CONTENT).toContain('/oh-my-claudecode:ultrawork');
+      expect(CLAUDE_MD_CONTENT).toContain('/oh-my-claudecode:planner');
     });
 
     it('should contain markdown tables', () => {

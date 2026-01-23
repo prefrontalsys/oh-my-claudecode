@@ -1,6 +1,6 @@
 ---
 name: omc-setup
-description: One-time setup for oh-my-claudecode (the ONLY command you need to learn)
+description: Setup and configure oh-my-claudecode (the ONLY command you need to learn)
 user-invocable: true
 ---
 
@@ -8,7 +8,22 @@ user-invocable: true
 
 This is the **only command you need to learn**. After running this, everything else is automatic.
 
-## Step 1: Ask User Preference
+## Usage Modes
+
+This skill handles three scenarios:
+
+1. **Initial Setup (no flags)**: First-time installation wizard
+2. **Local Configuration (`--local`)**: Configure project-specific settings (.claude/CLAUDE.md)
+3. **Global Configuration (`--global`)**: Configure global settings (~/.claude/CLAUDE.md)
+
+## Mode Detection
+
+Check for flags in the user's invocation:
+- If `--local` flag present → Skip to Local Configuration (Step 2A)
+- If `--global` flag present → Skip to Global Configuration (Step 2B)
+- If no flags → Run Initial Setup wizard (Step 1)
+
+## Step 1: Initial Setup Wizard (Default Behavior)
 
 Use the AskUserQuestion tool to prompt the user:
 
@@ -18,14 +33,20 @@ Use the AskUserQuestion tool to prompt the user:
 1. **Local (this project)** - Creates `.claude/CLAUDE.md` in current project directory. Best for project-specific configurations.
 2. **Global (all projects)** - Creates `~/.claude/CLAUDE.md` for all Claude Code sessions. Best for consistent behavior everywhere.
 
-## Step 2: Execute Based on Choice
+## Step 2A: Local Configuration (--local flag or user chose LOCAL)
 
-### If User Chooses LOCAL:
+**CRITICAL**: This ALWAYS downloads fresh CLAUDE.md from GitHub to the local project. DO NOT use the Write tool - use bash curl exclusively.
+
+### Create Local .claude Directory
 
 ```bash
 # Create .claude directory in current project
-mkdir -p .claude
+mkdir -p .claude && echo ".claude directory ready"
+```
 
+### Download Fresh CLAUDE.md
+
+```bash
 # Extract old version before download
 OLD_VERSION=$(grep -m1 "^# oh-my-claudecode" .claude/CLAUDE.md 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || echo "none")
 
@@ -44,7 +65,40 @@ else
 fi
 ```
 
-### If User Chooses GLOBAL:
+**Note**: The downloaded CLAUDE.md includes Context Persistence instructions with `<remember>` tags for surviving conversation compaction.
+
+**MANDATORY**: Always run this command. Do NOT skip. Do NOT use Write tool.
+
+**FALLBACK** if curl fails:
+Tell user to manually download from:
+https://raw.githubusercontent.com/Yeachan-Heo/oh-my-claudecode/main/docs/CLAUDE.md
+
+### Verify Plugin Installation
+
+```bash
+grep -q "oh-my-claudecode" ~/.claude/settings.json && echo "Plugin verified" || echo "Plugin NOT found - run: claude /install-plugin oh-my-claudecode"
+```
+
+### Confirm Local Configuration Success
+
+After completing local configuration, report:
+
+**OMC Project Configuration Complete**
+- CLAUDE.md: Updated with latest configuration from GitHub at ./.claude/CLAUDE.md
+- Scope: **PROJECT** - applies only to this project
+- Hooks: Provided by plugin (no manual installation needed)
+- Agents: 28+ available (base + tiered variants)
+- Model routing: Haiku/Sonnet/Opus based on task complexity
+
+**Note**: This configuration is project-specific and won't affect other projects or global settings.
+
+If `--local` flag was used, **STOP HERE**. Do not continue to HUD setup or other steps.
+
+## Step 2B: Global Configuration (--global flag or user chose GLOBAL)
+
+**CRITICAL**: This ALWAYS downloads fresh CLAUDE.md from GitHub to global config. DO NOT use the Write tool - use bash curl exclusively.
+
+### Download Fresh CLAUDE.md
 
 ```bash
 # Extract old version before download
@@ -64,6 +118,44 @@ else
   echo "Updated CLAUDE.md: $OLD_VERSION -> $NEW_VERSION"
 fi
 ```
+
+### Clean Up Legacy Hooks (if present)
+
+Check if old manual hooks exist and remove them to prevent duplicates:
+
+```bash
+# Remove legacy bash hook scripts (now handled by plugin system)
+rm -f ~/.claude/hooks/keyword-detector.sh
+rm -f ~/.claude/hooks/stop-continuation.sh
+rm -f ~/.claude/hooks/persistent-mode.sh
+rm -f ~/.claude/hooks/session-start.sh
+echo "Legacy hooks cleaned"
+```
+
+Check `~/.claude/settings.json` for manual hook entries. If the "hooks" key exists with UserPromptSubmit, Stop, or SessionStart entries pointing to bash scripts, inform the user:
+
+> **Note**: Found legacy hooks in settings.json. These should be removed since the plugin now provides hooks automatically. Remove the "hooks" section from ~/.claude/settings.json to prevent duplicate hook execution.
+
+### Verify Plugin Installation
+
+```bash
+grep -q "oh-my-claudecode" ~/.claude/settings.json && echo "Plugin verified" || echo "Plugin NOT found - run: claude /install-plugin oh-my-claudecode"
+```
+
+### Confirm Global Configuration Success
+
+After completing global configuration, report:
+
+**OMC Global Configuration Complete**
+- CLAUDE.md: Updated with latest configuration from GitHub at ~/.claude/CLAUDE.md
+- Scope: **GLOBAL** - applies to all Claude Code sessions
+- Hooks: Provided by plugin (no manual installation needed)
+- Agents: 28+ available (base + tiered variants)
+- Model routing: Haiku/Sonnet/Opus based on task complexity
+
+**Note**: Hooks are now managed by the plugin system automatically. No manual hook installation required.
+
+If `--global` flag was used, **STOP HERE**. Do not continue to HUD setup or other steps.
 
 ## Step 3: Setup HUD Statusline
 
@@ -275,7 +367,50 @@ echo "  https://github.com/Yeachan-Heo/oh-my-claudecode"
 echo ""
 ```
 
-## Fallback
+## Keeping Up to Date
 
-If curl fails, tell user to manually download from:
-https://raw.githubusercontent.com/Yeachan-Heo/oh-my-claudecode/main/docs/CLAUDE.md
+After installing oh-my-claudecode updates (via npm or plugin update), run:
+- `/oh-my-claudecode:omc-setup --local` to update project config
+- `/oh-my-claudecode:omc-setup --global` to update global config
+
+This ensures you have the newest features and agent configurations.
+
+## Help Text
+
+When user runs `/oh-my-claudecode:omc-setup --help` or just `--help`, display:
+
+```
+OMC Setup - Configure oh-my-claudecode
+
+USAGE:
+  /oh-my-claudecode:omc-setup           Run initial setup wizard
+  /oh-my-claudecode:omc-setup --local   Configure local project (.claude/CLAUDE.md)
+  /oh-my-claudecode:omc-setup --global  Configure global settings (~/.claude/CLAUDE.md)
+  /oh-my-claudecode:omc-setup --help    Show this help
+
+MODES:
+  Initial Setup (no flags)
+    - Interactive wizard for first-time setup
+    - Configures CLAUDE.md (local or global)
+    - Sets up HUD statusline
+    - Checks for updates
+    - Offers MCP server configuration
+
+  Local Configuration (--local)
+    - Downloads fresh CLAUDE.md to ./.claude/
+    - Project-specific settings
+    - Use this to update project config after OMC upgrades
+
+  Global Configuration (--global)
+    - Downloads fresh CLAUDE.md to ~/.claude/
+    - Applies to all Claude Code sessions
+    - Cleans up legacy hooks
+    - Use this to update global config after OMC upgrades
+
+EXAMPLES:
+  /oh-my-claudecode:omc-setup           # First time setup
+  /oh-my-claudecode:omc-setup --local   # Update this project
+  /oh-my-claudecode:omc-setup --global  # Update all projects
+
+For more info: https://github.com/Yeachan-Heo/oh-my-claudecode
+```

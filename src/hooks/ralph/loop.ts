@@ -20,18 +20,18 @@ import {
   formatPrdStatus,
   type PRDStatus,
   type UserStory
-} from '../ralph-prd/index.js';
+} from './prd.js';
 import {
   getProgressContext,
   appendProgress,
   initProgress,
   addPattern
-} from '../ralph-progress/index.js';
+} from './progress.js';
 import {
   UltraworkState,
   readUltraworkState as readUltraworkStateFromModule,
   writeUltraworkState as writeUltraworkStateFromModule
-} from '../ultrawork-state/index.js';
+} from '../ultrawork/index.js';
 
 // Forward declaration to avoid circular import - check ultraqa state file directly
 export function isUltraQAActive(directory: string): boolean {
@@ -445,4 +445,4 @@ export function shouldCompleteByPrd(directory: string): boolean {
 }
 
 // Re-export PRD types for convenience
-export type { PRD, PRDStatus, UserStory } from '../ralph-prd/index.js';
+export type { PRD, PRDStatus, UserStory } from './prd.js';

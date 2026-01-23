@@ -47,6 +47,9 @@ When you detect these patterns, you MUST invoke the corresponding skill:
 | Broad/vague request | `planner` (after explore for context) |
 | "don't stop", "must complete", "ralph" | `ralph` |
 | "fast", "parallel", "ulw", "ultrawork" | `ultrawork` |
+| "ultrapilot", "parallel build" | `ultrapilot` |
+| "swarm", "coordinated agents" | `swarm` |
+| "pipeline", "chain agents" | `pipeline` |
 | "plan this", "plan the" | `plan` or `planner` |
 | "ralplan" keyword | `ralplan` |
 | UI/component/styling work | `frontend-ui-ux` (silent) |
@@ -54,7 +57,7 @@ When you detect these patterns, you MUST invoke the corresponding skill:
 | "analyze", "debug", "investigate" | `analyze` |
 | "search", "find in codebase" | `deepsearch` |
 | "research", "analyze data", "statistics" | `research` |
-| "stop", "cancel", "abort" | appropriate cancel skill |
+| "stop", "cancel", "abort" | `cancel` (unified) |
 
 ### Smart Model Routing (SAVE TOKENS)
 
@@ -144,11 +147,8 @@ Users don't need to learn commands. You detect intent and activate behaviors aut
 
 ### Stopping and Cancelling
 
-User says "stop", "cancel", "abort" → You determine what to stop:
-- In autopilot → invoke `cancel-autopilot`
-- In ralph-loop → invoke `cancel-ralph`
-- In ultrawork → invoke `cancel-ultrawork`
-- In ultraqa → invoke `cancel-ultraqa`
+User says "stop", "cancel", "abort" → Invoke unified `cancel` skill (automatically detects active mode):
+- Detects and cancels: autopilot, ultrapilot, ralph, ultrawork, ultraqa, swarm, pipeline
 - In planning → end interview
 - Unclear → ask user
 
@@ -184,13 +184,17 @@ User says "stop", "cancel", "abort" → You determine what to stop:
 | `omc-default-global` | Configure global settings | - | (internal) |
 | `ralph-init` | Initialize PRD for structured ralph | - | `/oh-my-claudecode:ralph-init` |
 | `release` | Automated release workflow | - | `/oh-my-claudecode:release` |
-| `cancel-autopilot` | Cancel active autopilot session | "stop autopilot", "cancel autopilot" | `/oh-my-claudecode:cancel-autopilot` |
-| `cancel-ralph` | Cancel active ralph loop | "stop" in ralph | `/oh-my-claudecode:cancel-ralph` |
-| `cancel-ultrawork` | Cancel ultrawork mode | "stop" in ultrawork | `/oh-my-claudecode:cancel-ultrawork` |
-| `cancel-ultraqa` | Cancel ultraqa workflow | "stop" in ultraqa | `/oh-my-claudecode:cancel-ultraqa` |
+| `ultrapilot` | Parallel autopilot (3-5x faster) | "ultrapilot", "parallel build" | `/oh-my-claudecode:ultrapilot` |
+| `swarm` | N coordinated agents with task claiming | "swarm N agents" | `/oh-my-claudecode:swarm` |
+| `pipeline` | Sequential agent chaining | "pipeline", "chain" | `/oh-my-claudecode:pipeline` |
+| `cancel` | Unified cancellation for all modes | "stop", "cancel" | `/oh-my-claudecode:cancel` |
+| `cancel-autopilot` | Cancel active autopilot session (use `cancel` instead) | "stop autopilot", "cancel autopilot" | `/oh-my-claudecode:cancel-autopilot` |
+| `cancel-ralph` | Cancel active ralph loop (use `cancel` instead) | "stop" in ralph | `/oh-my-claudecode:cancel-ralph` |
+| `cancel-ultrawork` | Cancel ultrawork mode (use `cancel` instead) | "stop" in ultrawork | `/oh-my-claudecode:cancel-ultrawork` |
+| `cancel-ultraqa` | Cancel ultraqa workflow (use `cancel` instead) | "stop" in ultraqa | `/oh-my-claudecode:cancel-ultraqa` |
 | `research` | Parallel scientist orchestration | "research", "analyze data" | `/oh-my-claudecode:research` |
 
-### All 28 Agents
+### All 29 Agents
 
 Always use `oh-my-claudecode:` prefix when calling via Task tool.
 
@@ -198,7 +202,7 @@ Always use `oh-my-claudecode:` prefix when calling via Task tool.
 |--------|-------------|-----------------|-------------|
 | **Analysis** | `architect-low` | `architect-medium` | `architect` |
 | **Execution** | `executor-low` | `executor` | `executor-high` |
-| **Search** | `explore` | `explore-medium` | - |
+| **Search** | `explore` | `explore-medium` | `explore-high` |
 | **Research** | `researcher-low` | `researcher` | - |
 | **Frontend** | `designer-low` | `designer` | `designer-high` |
 | **Docs** | `writer` | - | - |
@@ -219,6 +223,7 @@ Always use `oh-my-claudecode:` prefix when calling via Task tool.
 |-----------|------------|-------|
 | Quick code lookup | `explore` | haiku |
 | Find files/patterns | `explore` or `explore-medium` | haiku/sonnet |
+| Complex architectural search | `explore-high` | opus |
 | Simple code change | `executor-low` | haiku |
 | Feature implementation | `executor` | sonnet |
 | Complex refactoring | `executor-high` | opus |
@@ -247,7 +252,7 @@ Always use `oh-my-claudecode:` prefix when calling via Task tool.
 
 ---
 
-## PART 3.5: NEW FEATURES (v3.1)
+## PART 3.5: NEW FEATURES (v3.1 - v3.4)
 
 ### Notepad Wisdom System
 
@@ -292,6 +297,78 @@ Project-level type checking via `lsp_diagnostics_directory` tool.
 ### Session Resume
 
 Background agents can be resumed with full context via `resume-session` tool.
+
+### Ultrapilot (v3.4)
+
+Parallel autopilot with up to 5 concurrent workers for 3-5x faster execution.
+
+**Trigger:** "ultrapilot", "parallel build", "swarm build"
+
+**How it works:**
+1. Task decomposition engine breaks complex tasks into parallelizable subtasks
+2. File ownership coordinator assigns non-overlapping file sets to workers
+3. Workers execute in parallel, coordinator manages shared files
+4. Results integrated with conflict detection
+
+**Best for:** Multi-component systems, fullstack apps, large refactoring
+
+**State files:**
+- `.omc/state/ultrapilot-state.json` - Session state
+- `.omc/state/ultrapilot-ownership.json` - File ownership
+
+### Swarm (v3.4)
+
+N coordinated agents with atomic task claiming from shared pool.
+
+**Usage:** `/swarm 5:executor "fix all TypeScript errors"`
+
+**Features:**
+- Shared task list with pending/claimed/done status
+- 5-minute timeout per task with auto-release
+- Clean completion when all tasks done
+
+### Pipeline (v3.4)
+
+Sequential agent chaining with data passing between stages.
+
+**Built-in Presets:**
+| Preset | Stages |
+|--------|--------|
+| `review` | explore → architect → critic → executor |
+| `implement` | planner → executor → tdd-guide |
+| `debug` | explore → architect → build-fixer |
+| `research` | parallel(researcher, explore) → architect → writer |
+| `refactor` | explore → architect-medium → executor-high → qa-tester |
+| `security` | explore → security-reviewer → executor → security-reviewer-low |
+
+**Custom pipelines:** `/pipeline explore:haiku -> architect:opus -> executor:sonnet`
+
+### Unified Cancel (v3.4)
+
+Smart cancellation that auto-detects active mode.
+
+**Usage:** `/cancel` or just say "stop", "cancel", "abort"
+
+Auto-detects and cancels: autopilot, ralph, ultrawork, ultraqa
+Use `--force` or `--all` to clear ALL states.
+
+### Verification Module (v3.4)
+
+Reusable verification protocol for workflows.
+
+**Standard Checks:** BUILD, TEST, LINT, FUNCTIONALITY, ARCHITECT, TODO, ERROR_FREE
+
+**Evidence validation:** 5-minute freshness detection, pass/fail tracking
+
+### State Management (v3.4)
+
+Standardized state file locations.
+
+**Standard paths:**
+- Local: `.omc/state/{name}.json`
+- Global: `~/.omc/state/{name}.json`
+
+Legacy locations auto-migrated on read.
 
 ---
 

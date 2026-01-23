@@ -2,7 +2,6 @@
  * Session Recovery Storage Operations
  *
  * Functions for reading and manipulating stored session data.
- * Adapted from oh-my-opencode's session-recovery hook.
  */
 
 import {
@@ -12,20 +11,20 @@ import {
   readFileSync,
   unlinkSync,
   writeFileSync,
-} from "node:fs";
-import { join } from "node:path";
+} from 'node:fs';
+import { join } from 'node:path';
 import {
   MESSAGE_STORAGE,
   PART_STORAGE,
   THINKING_TYPES,
   META_TYPES,
   PLACEHOLDER_TEXT,
-} from "./constants.js";
+} from './constants.js';
 import type {
   StoredMessageMeta,
   StoredPart,
   StoredTextPart,
-} from "./types.js";
+} from './types.js';
 
 /**
  * Generate a unique part ID
@@ -40,7 +39,7 @@ export function generatePartId(): string {
  * Get the directory containing messages for a session
  */
 export function getMessageDir(sessionID: string): string {
-  if (!existsSync(MESSAGE_STORAGE)) return "";
+  if (!existsSync(MESSAGE_STORAGE)) return '';
 
   const directPath = join(MESSAGE_STORAGE, sessionID);
   if (existsSync(directPath)) {
@@ -54,7 +53,7 @@ export function getMessageDir(sessionID: string): string {
     }
   }
 
-  return "";
+  return '';
 }
 
 /**
@@ -66,9 +65,9 @@ export function readMessages(sessionID: string): StoredMessageMeta[] {
 
   const messages: StoredMessageMeta[] = [];
   for (const file of readdirSync(messageDir)) {
-    if (!file.endsWith(".json")) continue;
+    if (!file.endsWith('.json')) continue;
     try {
-      const content = readFileSync(join(messageDir, file), "utf-8");
+      const content = readFileSync(join(messageDir, file), 'utf-8');
       messages.push(JSON.parse(content));
     } catch {
       continue;
@@ -92,9 +91,9 @@ export function readParts(messageID: string): StoredPart[] {
 
   const parts: StoredPart[] = [];
   for (const file of readdirSync(partDir)) {
-    if (!file.endsWith(".json")) continue;
+    if (!file.endsWith('.json')) continue;
     try {
-      const content = readFileSync(join(partDir, file), "utf-8");
+      const content = readFileSync(join(partDir, file), 'utf-8');
       parts.push(JSON.parse(content));
     } catch {
       continue;
@@ -111,16 +110,16 @@ export function hasContent(part: StoredPart): boolean {
   if (THINKING_TYPES.has(part.type)) return false;
   if (META_TYPES.has(part.type)) return false;
 
-  if (part.type === "text") {
+  if (part.type === 'text') {
     const textPart = part as StoredTextPart;
     return !!(textPart.text?.trim());
   }
 
-  if (part.type === "tool" || part.type === "tool_use") {
+  if (part.type === 'tool' || part.type === 'tool_use') {
     return true;
   }
 
-  if (part.type === "tool_result") {
+  if (part.type === 'tool_result') {
     return true;
   }
 
@@ -154,7 +153,7 @@ export function injectTextPart(
     id: partId,
     sessionID,
     messageID,
-    type: "text",
+    type: 'text',
     text,
     synthetic: true,
   };
@@ -225,7 +224,7 @@ export function findMessagesWithThinkingBlocks(sessionID: string): string[] {
   const result: string[] = [];
 
   for (const msg of messages) {
-    if (msg.role !== "assistant") continue;
+    if (msg.role !== 'assistant') continue;
 
     const parts = readParts(msg.id);
     const hasThinking = parts.some((p) => THINKING_TYPES.has(p.type));
@@ -245,7 +244,7 @@ export function findMessagesWithThinkingOnly(sessionID: string): string[] {
   const result: string[] = [];
 
   for (const msg of messages) {
-    if (msg.role !== "assistant") continue;
+    if (msg.role !== 'assistant') continue;
 
     const parts = readParts(msg.id);
     if (parts.length === 0) continue;
@@ -269,7 +268,7 @@ export function findMessagesWithOrphanThinking(sessionID: string): string[] {
   const result: string[] = [];
 
   for (const msg of messages) {
-    if (msg.role !== "assistant") continue;
+    if (msg.role !== 'assistant') continue;
 
     const parts = readParts(msg.id);
     if (parts.length === 0) continue;
@@ -297,11 +296,11 @@ function findLastThinkingContent(
   const messages = readMessages(sessionID);
 
   const currentIndex = messages.findIndex((m) => m.id === beforeMessageID);
-  if (currentIndex === -1) return "";
+  if (currentIndex === -1) return '';
 
   for (let i = currentIndex - 1; i >= 0; i--) {
     const msg = messages[i];
-    if (msg.role !== "assistant") continue;
+    if (msg.role !== 'assistant') continue;
 
     const parts = readParts(msg.id);
     for (const part of parts) {
@@ -316,7 +315,7 @@ function findLastThinkingContent(
     }
   }
 
-  return "";
+  return '';
 }
 
 /**
@@ -339,8 +338,8 @@ export function prependThinkingPart(
     id: partId,
     sessionID,
     messageID,
-    type: "thinking",
-    thinking: previousThinking || "[Continuing from previous reasoning]",
+    type: 'thinking',
+    thinking: previousThinking || '[Continuing from previous reasoning]',
     synthetic: true,
   };
 
@@ -361,10 +360,10 @@ export function stripThinkingParts(messageID: string): boolean {
 
   let anyRemoved = false;
   for (const file of readdirSync(partDir)) {
-    if (!file.endsWith(".json")) continue;
+    if (!file.endsWith('.json')) continue;
     try {
       const filePath = join(partDir, file);
-      const content = readFileSync(filePath, "utf-8");
+      const content = readFileSync(filePath, 'utf-8');
       const part = JSON.parse(content) as StoredPart;
       if (THINKING_TYPES.has(part.type)) {
         unlinkSync(filePath);
@@ -390,13 +389,13 @@ export function replaceEmptyTextParts(
 
   let anyReplaced = false;
   for (const file of readdirSync(partDir)) {
-    if (!file.endsWith(".json")) continue;
+    if (!file.endsWith('.json')) continue;
     try {
       const filePath = join(partDir, file);
-      const content = readFileSync(filePath, "utf-8");
+      const content = readFileSync(filePath, 'utf-8');
       const part = JSON.parse(content) as StoredPart;
 
-      if (part.type === "text") {
+      if (part.type === 'text') {
         const textPart = part as StoredTextPart;
         if (!textPart.text?.trim()) {
           textPart.text = replacementText;
@@ -423,7 +422,7 @@ export function findMessagesWithEmptyTextParts(sessionID: string): string[] {
   for (const msg of messages) {
     const parts = readParts(msg.id);
     const hasEmptyTextPart = parts.some((p) => {
-      if (p.type !== "text") return false;
+      if (p.type !== 'text') return false;
       const textPart = p as StoredTextPart;
       return !textPart.text?.trim();
     });
@@ -448,7 +447,7 @@ export function findMessageByIndexNeedingThinking(
   if (targetIndex < 0 || targetIndex >= messages.length) return null;
 
   const targetMsg = messages[targetIndex];
-  if (targetMsg.role !== "assistant") return null;
+  if (targetMsg.role !== 'assistant') return null;
 
   const parts = readParts(targetMsg.id);
   if (parts.length === 0) return null;

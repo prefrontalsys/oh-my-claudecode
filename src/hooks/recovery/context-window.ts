@@ -1,41 +1,56 @@
 /**
- * Context Window Limit Error Parser
+ * Context Window Limit Recovery
  *
- * Parses error responses to detect token/context limit errors.
- *
- * Adapted from oh-my-opencode's anthropic-context-window-limit-recovery hook.
+ * Detects context window limit errors and injects recovery messages
+ * to help Claude recover gracefully.
  */
 
-import type { ParsedTokenLimitError } from './types.js';
+import * as fs from 'fs';
+import {
+  TOKEN_LIMIT_PATTERNS,
+  TOKEN_LIMIT_KEYWORDS,
+  CONTEXT_LIMIT_RECOVERY_MESSAGE,
+  CONTEXT_LIMIT_SHORT_MESSAGE,
+  NON_EMPTY_CONTENT_RECOVERY_MESSAGE,
+  RECOVERY_FAILED_MESSAGE,
+  DEBUG,
+  DEBUG_FILE,
+} from './constants.js';
+import { RETRY_CONFIG } from './types.js';
+import type {
+  ParsedTokenLimitError,
+  RetryState,
+  TruncateState,
+  RecoveryResult,
+  RecoveryConfig,
+} from './types.js';
+
+function debugLog(...args: unknown[]): void {
+  if (DEBUG) {
+    const msg = `[${new Date().toISOString()}] [context-window-recovery] ${args
+      .map((a) =>
+        typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)
+      )
+      .join(' ')}\n`;
+    fs.appendFileSync(DEBUG_FILE, msg);
+  }
+}
 
 /**
- * Patterns to extract token counts from error messages
+ * Session recovery state tracking
  */
-const TOKEN_LIMIT_PATTERNS = [
-  /(\d+)\s*tokens?\s*>\s*(\d+)\s*maximum/i,
-  /prompt.*?(\d+).*?tokens.*?exceeds.*?(\d+)/i,
-  /(\d+).*?tokens.*?limit.*?(\d+)/i,
-  /context.*?length.*?(\d+).*?maximum.*?(\d+)/i,
-  /max.*?context.*?(\d+).*?but.*?(\d+)/i,
-];
+interface SessionState {
+  retryState: RetryState;
+  truncateState: TruncateState;
+  lastErrorTime: number;
+  errorCount: number;
+}
 
-/**
- * Keywords indicating token limit errors
- */
-const TOKEN_LIMIT_KEYWORDS = [
-  'prompt is too long',
-  'is too long',
-  'context_length_exceeded',
-  'max_tokens',
-  'token limit',
-  'context length',
-  'too many tokens',
-  'non-empty content',
-];
+const sessionStates = new Map<string, SessionState>();
+const STATE_TTL = 300_000; // 5 minutes
 
 /**
  * Patterns indicating thinking block structure errors (NOT token limit)
- * These should be handled differently
  */
 const THINKING_BLOCK_ERROR_PATTERNS = [
   /thinking.*first block/i,
@@ -47,15 +62,21 @@ const THINKING_BLOCK_ERROR_PATTERNS = [
 ];
 
 /**
- * Pattern to extract message index from error
- */
-const MESSAGE_INDEX_PATTERN = /messages\.(\d+)/;
-
-/**
  * Check if error is a thinking block structure error
  */
 function isThinkingBlockError(text: string): boolean {
   return THINKING_BLOCK_ERROR_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+/**
+ * Check if text indicates a token limit error
+ */
+function isTokenLimitError(text: string): boolean {
+  if (isThinkingBlockError(text)) {
+    return false;
+  }
+  const lower = text.toLowerCase();
+  return TOKEN_LIMIT_KEYWORDS.some((kw) => lower.includes(kw.toLowerCase()));
 }
 
 /**
@@ -81,22 +102,11 @@ function extractTokensFromMessage(
  * Extract message index from error text
  */
 function extractMessageIndex(text: string): number | undefined {
-  const match = text.match(MESSAGE_INDEX_PATTERN);
+  const match = text.match(/messages\.(\d+)/);
   if (match) {
     return parseInt(match[1], 10);
   }
   return undefined;
-}
-
-/**
- * Check if text indicates a token limit error
- */
-function isTokenLimitError(text: string): boolean {
-  if (isThinkingBlockError(text)) {
-    return false;
-  }
-  const lower = text.toLowerCase();
-  return TOKEN_LIMIT_KEYWORDS.some((kw) => lower.includes(kw.toLowerCase()));
 }
 
 /**
@@ -265,15 +275,133 @@ export function parseTokenLimitError(
 }
 
 /**
- * Check if a string contains a token limit error indication
+ * Check if text contains a context limit error
  */
 export function containsTokenLimitError(text: string): boolean {
   return isTokenLimitError(text);
 }
 
-// Re-export patterns for testing
-export {
-  TOKEN_LIMIT_PATTERNS,
-  TOKEN_LIMIT_KEYWORDS,
-  THINKING_BLOCK_ERROR_PATTERNS,
-};
+/**
+ * Get or create session state
+ */
+function getSessionState(sessionId: string): SessionState {
+  let state = sessionStates.get(sessionId);
+  const now = Date.now();
+
+  // Reset stale state
+  if (state && now - state.lastErrorTime > STATE_TTL) {
+    state = undefined;
+  }
+
+  if (!state) {
+    state = {
+      retryState: { attempt: 0, lastAttemptTime: 0 },
+      truncateState: { truncateAttempt: 0 },
+      lastErrorTime: now,
+      errorCount: 0,
+    };
+    sessionStates.set(sessionId, state);
+  }
+
+  return state;
+}
+
+/**
+ * Generate appropriate recovery message based on error and state
+ */
+function generateRecoveryMessage(
+  parsed: ParsedTokenLimitError | null,
+  state: SessionState,
+  config?: RecoveryConfig
+): { message?: string; errorType?: string } {
+  // Use custom message if provided
+  if (config?.customMessages?.context_window_limit) {
+    return {
+      message: config.customMessages.context_window_limit,
+      errorType: parsed?.errorType,
+    };
+  }
+
+  // Handle non-empty content error
+  if (parsed?.errorType?.includes('non-empty content')) {
+    return {
+      message: NON_EMPTY_CONTENT_RECOVERY_MESSAGE,
+      errorType: 'non-empty content',
+    };
+  }
+
+  // Check retry limits
+  state.retryState.attempt++;
+  state.retryState.lastAttemptTime = Date.now();
+
+  if (state.retryState.attempt > RETRY_CONFIG.maxAttempts) {
+    return {
+      message: RECOVERY_FAILED_MESSAGE,
+      errorType: 'recovery_exhausted',
+    };
+  }
+
+  // Return detailed or short message based on config
+  if (config?.detailed !== false) {
+    let message = CONTEXT_LIMIT_RECOVERY_MESSAGE;
+
+    // Add token info if available
+    if (parsed?.currentTokens && parsed?.maxTokens) {
+      message += `\nToken Details:
+- Current: ${parsed.currentTokens.toLocaleString()} tokens
+- Maximum: ${parsed.maxTokens.toLocaleString()} tokens
+- Over limit by: ${(parsed.currentTokens - parsed.maxTokens).toLocaleString()} tokens
+`;
+    }
+
+    return {
+      message,
+      errorType: parsed?.errorType || 'token_limit_exceeded',
+    };
+  }
+
+  return {
+    message: CONTEXT_LIMIT_SHORT_MESSAGE,
+    errorType: parsed?.errorType || 'token_limit_exceeded',
+  };
+}
+
+/**
+ * Handle context window limit recovery
+ */
+export function handleContextWindowRecovery(
+  sessionId: string,
+  error: unknown,
+  config?: RecoveryConfig
+): RecoveryResult {
+  const parsed = parseTokenLimitError(error);
+
+  if (!parsed) {
+    return {
+      attempted: false,
+      success: false,
+    };
+  }
+
+  debugLog('detected token limit error', { sessionId, parsed });
+
+  const state = getSessionState(sessionId);
+  state.lastErrorTime = Date.now();
+  state.errorCount++;
+
+  const recovery = generateRecoveryMessage(parsed, state, config);
+
+  return {
+    attempted: true,
+    success: !!recovery.message,
+    message: recovery.message,
+    errorType: recovery.errorType,
+  };
+}
+
+/**
+ * Check if text contains a context limit error
+ */
+export function detectContextLimitError(text: string): boolean {
+  return containsTokenLimitError(text);
+}
