@@ -245,7 +245,7 @@ Settings live in `~/.claude/settings.json`:
 ## NOTES
 
 - **Claude Code Version**: Requires Claude Code CLI
-- **Installation**: `npx oh-my-claudecode install`
+- **Installation**: `npx oh-my-claude-sisyphus install`
 - **Updates**: Silent auto-update checks
 - **Compatibility**: Designed for Claude Code, not OpenCode
 - **State Persistence**: Uses ~/.claude/.omc/ directory

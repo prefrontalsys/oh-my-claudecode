@@ -98,10 +98,10 @@ Ask user: "Would you like to install the OMC CLI for standalone analytics? (Reco
 # Check for bun (preferred) or npm
 if command -v bun &> /dev/null; then
   echo "Installing OMC CLI via bun..."
-  bun install -g oh-my-claudecode
+  bun install -g oh-my-claude-sisyphus
 elif command -v npm &> /dev/null; then
   echo "Installing OMC CLI via npm..."
-  npm install -g oh-my-claudecode
+  npm install -g oh-my-claude-sisyphus
 else
   echo "ERROR: Neither bun nor npm found. Please install Node.js or Bun first."
   exit 1
@@ -119,7 +119,7 @@ fi
 
 ### If User Chooses NO:
 
-Skip this step. User can install later with `npm install -g oh-my-claudecode`.
+Skip this step. User can install later with `npm install -g oh-my-claude-sisyphus`.
 
 ## Step 4: Verify Plugin Installation
 

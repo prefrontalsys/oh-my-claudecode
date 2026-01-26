@@ -622,9 +622,9 @@ This is a **breaking release** that renames the entire project and all agent nam
 
 ### Breaking Changes
 
-- **Package Renamed**: `oh-my-claude-sisyphus` → `oh-my-claudecode`
-  - Installation: `npx oh-my-claudecode install` (previously `npx oh-my-claude-sisyphus install`)
-  - All references updated in documentation and code
+- **Project Renamed**: Project renamed to `oh-my-claudecode`
+  - npm package remains `oh-my-claude-sisyphus`: `npx oh-my-claude-sisyphus install`
+  - Plugin name is `oh-my-claudecode` for Claude Code integration
 
 - **Agent Names Changed**: Greek mythology → Intuitive names
   - `prometheus` → `planner` (strategic planning)
@@ -656,7 +656,7 @@ This is a **breaking release** that renames the entire project and all agent nam
 
 For existing users upgrading from 2.x:
 
-1. **Reinstall**: Run `npx oh-my-claudecode install` to update hooks and configs
+1. **Reinstall**: Run `npx oh-my-claude-sisyphus install` to update hooks and configs
 2. **State Migration**: Old `.sisyphus/` directories will continue to work, but new state saves to `.omc/`
 3. **Agent References**: Update any custom scripts/configs that referenced old agent names
 4. **Environment Variables**: Rename any `SISYPHUS_*` variables to `OMC_*`
