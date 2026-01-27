@@ -48,7 +48,7 @@ function countIncompleteTodos(todosDir) {
 
 // Check if HUD is properly installed
 function checkHudInstallation() {
-  const hudScript = join(homedir(), '.claude', 'hud', 'sisyphus-hud.mjs');
+  const hudScript = join(homedir(), '.claude', 'hud', 'omc-hud.mjs');
   const settingsFile = join(homedir(), '.claude', 'settings.json');
 
   // Check if HUD script exists
