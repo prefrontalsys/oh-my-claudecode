@@ -45,6 +45,7 @@ import {
 import {
   processSubagentStart,
   processSubagentStop,
+  getAgentDashboard,
   type SubagentStartInput,
   type SubagentStopInput
 } from './subagent-tracker/index.js';
@@ -481,6 +482,16 @@ function processPreToolUse(input: HookInput): HookOutput {
     }
   }
 
+  // Inject agent dashboard for Task tool calls (debugging parallel agents)
+  if (input.toolName === 'Task') {
+    const dashboard = getAgentDashboard(directory);
+    if (dashboard) {
+      const baseMessage = enforcementResult.message || '';
+      const combined = baseMessage ? `${baseMessage}\n\n${dashboard}` : dashboard;
+      return { continue: true, message: combined };
+    }
+  }
+
   // Return enforcement message if present (warning), otherwise continue silently
   return enforcementResult.message
     ? { continue: true, message: enforcementResult.message }
@@ -490,9 +501,20 @@ function processPreToolUse(input: HookInput): HookOutput {
 /**
  * Process post-tool-use hook
  */
-function processPostToolUse(_input: HookInput): HookOutput {
-  // Post-tool-use hook - currently no action needed
-  // Task completion tracking would require tool_use_id which isn't reliably available
+function processPostToolUse(input: HookInput): HookOutput {
+  const directory = input.directory || process.cwd();
+
+  // After Task completion, show updated agent dashboard
+  if (input.toolName === 'Task') {
+    const dashboard = getAgentDashboard(directory);
+    if (dashboard) {
+      return {
+        continue: true,
+        message: dashboard
+      };
+    }
+  }
+
   return { continue: true };
 }
 

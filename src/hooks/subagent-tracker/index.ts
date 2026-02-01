@@ -27,6 +27,13 @@ export interface SubagentInfo {
   completed_at?: string;
   duration_ms?: number;
   output_summary?: string;
+  tool_usage?: ToolUsageEntry[];
+}
+
+export interface ToolUsageEntry {
+  tool_name: string;
+  timestamp: string;
+  success?: boolean;
 }
 
 export interface SubagentTrackingState {
@@ -488,6 +495,71 @@ export function getTrackingStats(directory: string): {
     failed: state.total_failed,
     total: state.total_spawned,
   };
+}
+
+/**
+ * Record a tool usage event for a specific agent
+ * Called from PreToolUse/PostToolUse hooks to track which agent uses which tool
+ */
+export function recordToolUsage(
+  directory: string,
+  agentId: string,
+  toolName: string,
+  success?: boolean
+): void {
+  if (!acquireLock(directory)) return;
+
+  try {
+    const state = readTrackingState(directory);
+    const agent = state.agents.find(a => a.agent_id === agentId && a.status === 'running');
+
+    if (agent) {
+      if (!agent.tool_usage) agent.tool_usage = [];
+      // Keep last 50 tool usages per agent to prevent unbounded growth
+      if (agent.tool_usage.length >= 50) {
+        agent.tool_usage = agent.tool_usage.slice(-49);
+      }
+      agent.tool_usage.push({
+        tool_name: toolName,
+        timestamp: new Date().toISOString(),
+        success,
+      });
+      writeTrackingState(directory, state);
+    }
+  } finally {
+    releaseLock(directory);
+  }
+}
+
+/**
+ * Generate a formatted dashboard of all running agents
+ * Used for debugging parallel agent execution in ultrawork mode
+ */
+export function getAgentDashboard(directory: string): string {
+  const state = readTrackingState(directory);
+  const running = state.agents.filter(a => a.status === 'running');
+
+  if (running.length === 0) return '';
+
+  const now = Date.now();
+  const lines: string[] = [`Agent Dashboard (${running.length} active):`];
+
+  for (const agent of running) {
+    const elapsed = Math.round((now - new Date(agent.started_at).getTime()) / 1000);
+    const shortType = agent.agent_type.replace('oh-my-claudecode:', '');
+    const toolCount = agent.tool_usage?.length || 0;
+    const lastTool = agent.tool_usage?.[agent.tool_usage.length - 1]?.tool_name || '-';
+    const desc = agent.task_description ? ` "${agent.task_description.substring(0, 60)}"` : '';
+
+    lines.push(`  [${agent.agent_id.substring(0, 7)}] ${shortType} (${elapsed}s) tools:${toolCount} last:${lastTool}${desc}`);
+  }
+
+  const stale = getStaleAgents(state);
+  if (stale.length > 0) {
+    lines.push(`  ⚠ ${stale.length} stale agent(s) detected`);
+  }
+
+  return lines.join('\n');
 }
 
 // ============================================================================

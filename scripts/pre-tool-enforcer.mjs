@@ -31,6 +31,19 @@ function extractJsonField(input, field, defaultValue = '') {
   }
 }
 
+// Get agent tracking info from state file
+function getAgentTrackingInfo(directory) {
+  const trackingFile = join(directory, '.omc', 'state', 'subagent-tracking.json');
+  try {
+    if (existsSync(trackingFile)) {
+      const data = JSON.parse(readFileSync(trackingFile, 'utf-8'));
+      const running = (data.agents || []).filter(a => a.status === 'running').length;
+      return { running, total: data.total_spawned || 0 };
+    }
+  } catch {}
+  return { running: 0, total: 0 };
+}
+
 // Get todo status from project and global todos
 function getTodoStatus(directory) {
   let pending = 0;
@@ -87,12 +100,30 @@ function getTodoStatus(directory) {
   return '';
 }
 
+// Generate agent spawn message with metadata
+function generateAgentSpawnMessage(toolInput, directory, todoStatus) {
+  if (!toolInput || typeof toolInput !== 'object') {
+    return `${todoStatus}Launch multiple agents in parallel when tasks are independent. Use run_in_background for long operations.`;
+  }
+
+  const agentType = toolInput.subagent_type || 'unknown';
+  const model = toolInput.model || 'inherit';
+  const desc = toolInput.description || '';
+  const bg = toolInput.run_in_background ? ' [BACKGROUND]' : '';
+  const tracking = getAgentTrackingInfo(directory);
+
+  const parts = [`${todoStatus}Spawning agent: ${agentType} (${model})${bg}`];
+  if (desc) parts.push(`Task: ${desc}`);
+  if (tracking.running > 0) parts.push(`Active agents: ${tracking.running}`);
+
+  return parts.join(' | ');
+}
+
 // Generate contextual message based on tool type
 function generateMessage(toolName, todoStatus) {
   const messages = {
     TodoWrite: `${todoStatus}Mark todos in_progress BEFORE starting, completed IMMEDIATELY after finishing.`,
     Bash: `${todoStatus}Use parallel execution for independent tasks. Use run_in_background for long operations (npm install, builds, tests).`,
-    Task: `${todoStatus}Launch multiple agents in parallel when tasks are independent. Use run_in_background for long operations.`,
     Edit: `${todoStatus}Verify changes work after editing. Test functionality before marking complete.`,
     Write: `${todoStatus}Verify changes work after editing. Test functionality before marking complete.`,
     Read: `${todoStatus}Read multiple files in parallel when possible for faster analysis.`,
@@ -111,7 +142,17 @@ async function main() {
     const directory = extractJsonField(input, 'directory', process.cwd());
 
     const todoStatus = getTodoStatus(directory);
-    const message = generateMessage(toolName, todoStatus);
+
+    let message;
+    if (toolName === 'Task') {
+      let toolInput = null;
+      try {
+        toolInput = JSON.parse(input).toolInput;
+      } catch {}
+      message = generateAgentSpawnMessage(toolInput, directory, todoStatus);
+    } else {
+      message = generateMessage(toolName, todoStatus);
+    }
 
     console.log(JSON.stringify({
       continue: true,

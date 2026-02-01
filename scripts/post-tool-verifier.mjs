@@ -170,8 +170,34 @@ function detectWriteFailure(output) {
   return errorPatterns.some(pattern => pattern.test(output));
 }
 
+// Get agent completion summary from tracking state
+function getAgentCompletionSummary(directory) {
+  const trackingFile = join(directory, '.omc', 'state', 'subagent-tracking.json');
+  try {
+    if (existsSync(trackingFile)) {
+      const data = JSON.parse(readFileSync(trackingFile, 'utf-8'));
+      const agents = data.agents || [];
+      const running = agents.filter(a => a.status === 'running');
+      const completed = data.total_completed || 0;
+      const failed = data.total_failed || 0;
+
+      if (running.length === 0 && completed === 0 && failed === 0) return '';
+
+      const parts = [];
+      if (running.length > 0) {
+        parts.push(`Running: ${running.length} [${running.map(a => a.agent_type.replace('oh-my-claudecode:', '')).join(', ')}]`);
+      }
+      if (completed > 0) parts.push(`Completed: ${completed}`);
+      if (failed > 0) parts.push(`Failed: ${failed}`);
+
+      return parts.join(' | ');
+    }
+  } catch {}
+  return '';
+}
+
 // Generate contextual message
-function generateMessage(toolName, toolOutput, sessionId, toolCount) {
+function generateMessage(toolName, toolOutput, sessionId, toolCount, directory) {
   let message = '';
 
   switch (toolName) {
@@ -183,7 +209,8 @@ function generateMessage(toolName, toolOutput, sessionId, toolCount) {
       }
       break;
 
-    case 'Task':
+    case 'Task': {
+      const agentSummary = getAgentCompletionSummary(directory);
       if (detectWriteFailure(toolOutput)) {
         message = 'Task delegation failed. Verify agent name and parameters.';
       } else if (detectBackgroundOperation(toolOutput)) {
@@ -191,7 +218,11 @@ function generateMessage(toolName, toolOutput, sessionId, toolCount) {
       } else if (toolCount > 5) {
         message = `Multiple tasks delegated (${toolCount} total). Track their completion status.`;
       }
+      if (agentSummary) {
+        message = message ? `${message} | ${agentSummary}` : agentSummary;
+      }
       break;
+    }
 
     case 'Edit':
       if (detectWriteFailure(toolOutput)) {
@@ -260,7 +291,7 @@ async function main() {
     }
 
     // Generate contextual message
-    const message = generateMessage(toolName, toolOutput, sessionId, toolCount);
+    const message = generateMessage(toolName, toolOutput, sessionId, toolCount, directory);
 
     // Build response - use hookSpecificOutput.additionalContext for PostToolUse
     const response = { continue: true };
