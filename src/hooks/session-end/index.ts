@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { triggerStopCallbacks } from './callbacks.js';
 
 export interface SessionEndInput {
   session_id: string;
@@ -314,7 +315,7 @@ export function exportSessionSummary(directory: string, metrics: SessionMetrics)
 /**
  * Process session end
  */
-export function processSessionEnd(input: SessionEndInput): HookOutput {
+export async function processSessionEnd(input: SessionEndInput): Promise<HookOutput> {
   // Record and export session metrics to disk
   const metrics = recordSessionMetrics(input.cwd, input);
   exportSessionSummary(input.cwd, metrics);
@@ -326,6 +327,12 @@ export function processSessionEnd(input: SessionEndInput): HookOutput {
   // This ensures the stop hook won't malfunction in subsequent sessions
   // Pass session_id to only clean up this session's states
   cleanupModeStates(input.cwd, input.session_id);
+
+  // Trigger stop hook callbacks (#395)
+  await triggerStopCallbacks(metrics, {
+    session_id: input.session_id,
+    cwd: input.cwd,
+  });
 
   // Return simple response - metrics are persisted to .omc/sessions/
   return { continue: true };

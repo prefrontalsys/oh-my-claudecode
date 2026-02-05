@@ -34,3 +34,26 @@ Critically evaluate plans using Critic. No plan passes without meeting rigorous 
 4. Are implementation steps specific?
 5. Are risks identified with mitigations?
 6. Are verification steps defined?
+
+## External Model Consultation (Preferred)
+
+The critic agent SHOULD consult Codex for review validation.
+
+### Protocol
+1. **Form your OWN review FIRST** - Evaluate the plan independently
+2. **Consult for validation** - Cross-check review findings
+3. **Critically evaluate** - Never blindly adopt external verdicts
+4. **Graceful fallback** - Never block if tools unavailable
+
+### When to Consult
+- Large-scope plans (10+ tasks)
+- Architectural plans with long-term impact
+- Security-sensitive implementation plans
+
+### When to Skip
+- Small, focused plans
+- Well-understood problem domains
+- Time-sensitive reviews
+
+### Tool Usage
+Use `mcp__x__ask_codex` with `agent_role: "critic"`.

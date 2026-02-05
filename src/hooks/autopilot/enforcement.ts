@@ -10,6 +10,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { OmcPaths } from '../../lib/worktree-paths.js';
 import {
   readAutopilotState,
   writeAutopilotState,
@@ -20,6 +21,7 @@ import {
 } from './state.js';
 import { getPhasePrompt } from './prompts.js';
 import type { AutopilotState, AutopilotPhase, AutopilotSignal } from './types.js';
+import { readLastToolError, getToolErrorRetryGuidance, type ToolErrorState } from '../persistent-mode/index.js';
 
 export interface AutopilotEnforcementResult {
   /** Whether to block the stop event */
@@ -34,6 +36,7 @@ export interface AutopilotEnforcementResult {
     maxIterations?: number;
     tasksCompleted?: number;
     tasksTotal?: number;
+    toolError?: ToolErrorState;
   };
 }
 
@@ -223,18 +226,22 @@ function generateContinuationPrompt(
   state: AutopilotState,
   directory: string
 ): AutopilotEnforcementResult {
+  // Read tool error before generating message
+  const toolError = readLastToolError(directory);
+  const errorGuidance = getToolErrorRetryGuidance(toolError);
+
   // Increment iteration
   state.iteration += 1;
   writeAutopilotState(directory, state);
 
   const phasePrompt = getPhasePrompt(state.phase, {
     idea: state.originalIdea,
-    specPath: state.expansion.spec_path || '.omc/autopilot/spec.md',
-    planPath: state.planning.plan_path || '.omc/plans/autopilot-impl.md'
+    specPath: state.expansion.spec_path || `${OmcPaths.AUTOPILOT}/spec.md`,
+    planPath: state.planning.plan_path || `${OmcPaths.PLANS}/autopilot-impl.md`
   });
 
-  const continuationPrompt = `<autopilot-continuation>
-
+  let continuationPrompt = `<autopilot-continuation>
+${errorGuidance ? errorGuidance + '\n' : ''}
 [AUTOPILOT - PHASE: ${state.phase.toUpperCase()} | ITERATION ${state.iteration}/${state.max_iterations}]
 
 Your previous response did not signal phase completion. Continue working on the current phase.
@@ -262,7 +269,8 @@ IMPORTANT: When the phase is complete, output the appropriate signal:
       iteration: state.iteration,
       maxIterations: state.max_iterations,
       tasksCompleted: state.execution.tasks_completed,
-      tasksTotal: state.execution.tasks_total
+      tasksTotal: state.execution.tasks_total,
+      toolError: toolError || undefined
     }
   };
 }

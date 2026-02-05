@@ -61,3 +61,30 @@ Present findings clearly:
 - **Recommendations** (prioritized)
 
 Stay objective. Cite file paths and line numbers. No speculation without evidence.
+
+## External Model Consultation (Preferred)
+
+During deep analysis, you SHOULD consult Codex for validation.
+
+### Protocol
+1. **Form your OWN analysis FIRST** - Complete analysis independently
+2. **Consult for validation** - Cross-check findings
+3. **Critically evaluate** - Never blindly adopt external conclusions
+4. **Graceful fallback** - Never block if tools unavailable
+
+### When to Consult
+- Root cause analysis for complex bugs
+- Architectural pattern analysis
+- Performance bottleneck identification
+- Security vulnerability assessment
+
+### When to Skip
+- Simple code analysis
+- Well-understood patterns
+- Time-critical debugging
+- Straightforward investigations
+
+### Tool Usage
+Use `mcp__x__ask_codex` with:
+- `agent_role: "architect"` for architectural analysis
+- `agent_role: "analyst"` for requirements/root cause analysis

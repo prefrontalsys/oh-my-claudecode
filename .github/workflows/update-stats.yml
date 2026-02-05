@@ -1,0 +1,150 @@
+name: Update Website Stats
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for manual trigger'
+        required: false
+        default: 'Manual update'
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  update-stats:
+    name: Fetch and Update Stats
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Fetch GitHub stats
+        id: github-stats
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          REPO="${{ github.repository }}"
+
+          # Fetch repository data from GitHub API
+          RESPONSE=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/$REPO")
+
+          STARS=$(echo "$RESPONSE" | jq -r '.stargazers_count // 0')
+          FORKS=$(echo "$RESPONSE" | jq -r '.forks_count // 0')
+          UPDATED=$(echo "$RESPONSE" | jq -r '.updated_at // empty')
+
+          echo "stars=$STARS" >> $GITHUB_OUTPUT
+          echo "forks=$FORKS" >> $GITHUB_OUTPUT
+          echo "updated=$UPDATED" >> $GITHUB_OUTPUT
+
+          echo "GitHub Stats:"
+          echo "  Stars: $STARS"
+          echo "  Forks: $FORKS"
+          echo "  Updated: $UPDATED"
+
+      - name: Fetch NPM stats
+        id: npm-stats
+        run: |
+          PACKAGE_NAME="@oh-my-claudecode/core"
+
+          # Try to fetch download stats from NPM
+          # Using the package endpoint for basic info
+          NPM_RESPONSE=$(curl -s "https://registry.npmjs.org/$PACKAGE_NAME" || echo '{}')
+
+          # Get the latest version
+          LATEST_VERSION=$(echo "$NPM_RESPONSE" | jq -r '.">version" // ."dist-tags".latest // "unknown"')
+
+          # Get downloads (last week) - using npm's download endpoint
+          # Note: This requires the package to exist on npm
+          DOWNLOADS_RESPONSE=$(curl -s "https://api.npmjs.org/downloads/point/last-week/$PACKAGE_NAME" || echo '{}')
+          DOWNLOADS=$(echo "$DOWNLOADS_RESPONSE" | jq -r '.downloads // 0')
+
+          echo "version=$LATEST_VERSION" >> $GITHUB_OUTPUT
+          echo "downloads=$DOWNLOADS" >> $GITHUB_OUTPUT
+
+          echo "NPM Stats:"
+          echo "  Version: $LATEST_VERSION"
+          echo "  Downloads (last week): $DOWNLOADS"
+
+      - name: Update stats.json
+        run: |
+          STATS_FILE="website/data/stats.json"
+
+          # Ensure the data directory exists
+          mkdir -p website/data
+
+          # Create/update the stats file
+          cat > "$STATS_FILE" << EOF
+          {
+            "github": {
+              "stars": ${{ steps.github-stats.outputs.stars }},
+              "forks": ${{ steps.github-stats.outputs.forks }},
+              "updated": "${{ steps.github-stats.outputs.updated }}"
+            },
+            "npm": {
+              "downloads": ${{ steps.npm-stats.outputs.downloads }},
+              "version": "${{ steps.npm-stats.outputs.version }}"
+            },
+            "agents": 33,
+            "skills": 40,
+            "lastUpdated": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          }
+          EOF
+
+          echo "Updated stats.json:"
+          cat "$STATS_FILE"
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          if git diff --quiet website/data/stats.json; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No changes detected in stats.json"
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Changes detected in stats.json"
+          fi
+
+      - name: Commit and push changes
+        if: steps.check-changes.outputs.changed == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+
+          git add website/data/stats.json
+          git commit -m "chore: update website stats [skip ci]
+
+          - GitHub stars: ${{ steps.github-stats.outputs.stars }}
+          - GitHub forks: ${{ steps.github-stats.outputs.forks }}
+          - NPM downloads: ${{ steps.npm-stats.outputs.downloads }}
+          - NPM version: ${{ steps.npm-stats.outputs.version }}
+
+          Triggered by: ${{ github.event_name }}"
+
+          git push
+
+      - name: Summary
+        run: |
+          echo "## Stats Update Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| GitHub Stars | ${{ steps.github-stats.outputs.stars }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| GitHub Forks | ${{ steps.github-stats.outputs.forks }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| NPM Downloads (weekly) | ${{ steps.npm-stats.outputs.downloads }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| NPM Version | ${{ steps.npm-stats.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Changes Committed | ${{ steps.check-changes.outputs.changed }} |" >> $GITHUB_STEP_SUMMARY

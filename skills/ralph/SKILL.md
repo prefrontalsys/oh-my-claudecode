@@ -195,6 +195,26 @@ Even for small changes (<5 files), ralph requires at least STANDARD tier verific
 
 For complete tier selection rules, read: `docs/shared/verification-tiers.md`
 
+## External Model Consultation (Preferred)
+
+During architect verification, the architect agent SHOULD consult Codex for validation cross-check.
+
+### Protocol
+1. Architect forms OWN verification analysis first
+2. Consults Codex with `agent_role: "architect"`
+3. Never blocks on unavailable tools
+4. Verification proceeds regardless of Codex availability
+
+### When Architect Should Consult
+- Security-sensitive changes
+- Architectural refactoring
+- Complex multi-system integration
+
+### When to Skip
+- Simple feature additions
+- Well-tested changes
+- Time-critical verification
+
 ## ZERO TOLERANCE
 
 - NO Scope Reduction - deliver FULL implementation

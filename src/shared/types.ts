@@ -8,7 +8,10 @@ export interface AgentConfig {
   name: string;
   description: string;
   prompt: string;
-  tools: string[];
+  /** Tools the agent can use (optional - all tools allowed by default if omitted) */
+  tools?: string[];
+  /** Tools explicitly disallowed for this agent */
+  disallowedTools?: string[];
   model?: ModelType;
   defaultModel?: ModelType;
 }

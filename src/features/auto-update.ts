@@ -28,6 +28,46 @@ export const VERSION_FILE = join(CLAUDE_CONFIG_DIR, '.omc-version.json');
 export const CONFIG_FILE = join(CLAUDE_CONFIG_DIR, '.omc-config.json');
 
 /**
+ * Stop hook callback configuration for file logging
+ */
+export interface StopCallbackFileConfig {
+  enabled: boolean;
+  /** File path with placeholders: {session_id}, {date}, {time} */
+  path: string;
+  /** Output format */
+  format?: 'markdown' | 'json';
+}
+
+/**
+ * Stop hook callback configuration for Telegram
+ */
+export interface StopCallbackTelegramConfig {
+  enabled: boolean;
+  /** Telegram bot token */
+  botToken?: string;
+  /** Chat ID to send messages to */
+  chatId?: string;
+}
+
+/**
+ * Stop hook callback configuration for Discord
+ */
+export interface StopCallbackDiscordConfig {
+  enabled: boolean;
+  /** Discord webhook URL */
+  webhookUrl?: string;
+}
+
+/**
+ * Stop hook callbacks configuration
+ */
+export interface StopHookCallbacksConfig {
+  file?: StopCallbackFileConfig;
+  telegram?: StopCallbackTelegramConfig;
+  discord?: StopCallbackDiscordConfig;
+}
+
+/**
  * OMC configuration (stored in .omc-config.json)
  */
 export interface SisyphusConfig {
@@ -57,6 +97,8 @@ export interface SisyphusConfig {
   setupCompleted?: string;
   /** Version of setup wizard that was completed */
   setupVersion?: string;
+  /** Stop hook callback configuration */
+  stopHookCallbacks?: StopHookCallbacksConfig;
 }
 
 /**
@@ -81,6 +123,7 @@ export function getSisyphusConfig(): SisyphusConfig {
       ecomode: config.ecomode,
       setupCompleted: config.setupCompleted,
       setupVersion: config.setupVersion,
+      stopHookCallbacks: config.stopHookCallbacks,
     };
   } catch {
     // If config file is invalid, default to disabled for security

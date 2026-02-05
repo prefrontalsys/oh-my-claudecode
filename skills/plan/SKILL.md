@@ -199,6 +199,31 @@ Plans must meet these standards:
 - No vague terms without metrics
 - All risks have mitigations
 
+## External Model Consultation (Preferred)
+
+During complex planning, you SHOULD consult Codex for validation.
+
+### Protocol
+1. **Form your OWN analysis FIRST** - Never start with external consultation
+2. **Consult for validation** - Cross-check with external model
+3. **Critically evaluate** - Never blindly adopt external output
+4. **Graceful fallback** - Never block if tools unavailable
+
+### When to Consult
+- Large-scope plans touching 10+ files
+- Architectural decisions with long-term impact
+- Unfamiliar domains requiring validation
+
+### When to Skip
+- Small, focused plans
+- Well-understood problem domains
+- Time-sensitive planning
+
+### Tool Usage
+Use `mcp__x__ask_codex` with:
+- `agent_role: "planner"` for planning validation
+- `agent_role: "analyst"` for requirements analysis
+
 ## Plan Storage
 
 - Drafts are saved to `.omc/drafts/`

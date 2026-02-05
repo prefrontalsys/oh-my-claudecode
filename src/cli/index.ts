@@ -28,7 +28,10 @@ import {
   checkForUpdates,
   performUpdate,
   formatUpdateNotification,
-  getInstalledVersion
+  getInstalledVersion,
+  getSisyphusConfig,
+  CONFIG_FILE,
+  type SisyphusConfig,
 } from '../features/auto-update.js';
 import {
   install as installSisyphus,
@@ -562,6 +565,118 @@ Examples:
 
     console.log(chalk.blue('Current configuration:\n'));
     console.log(JSON.stringify(config, null, 2));
+  });
+
+/**
+ * Config stop-callback subcommand - Configure stop hook callbacks
+ */
+const configStopCallback = program
+  .command('config-stop-callback <type>')
+  .description('Configure stop hook callbacks (file/telegram/discord)')
+  .option('--enable', 'Enable callback')
+  .option('--disable', 'Disable callback')
+  .option('--path <path>', 'File path (supports {session_id}, {date}, {time})')
+  .option('--format <format>', 'File format: markdown | json')
+  .option('--token <token>', 'Telegram bot token')
+  .option('--chat <id>', 'Telegram chat ID')
+  .option('--webhook <url>', 'Discord webhook URL')
+  .option('--show', 'Show current configuration')
+  .addHelpText('after', `
+Types:
+  file       File system callback (saves session summary to disk)
+  telegram   Telegram bot notification
+  discord    Discord webhook notification
+
+Examples:
+  $ omc config-stop-callback file --enable --path ~/.claude/logs/{date}.md
+  $ omc config-stop-callback telegram --enable --token <token> --chat <id>
+  $ omc config-stop-callback discord --enable --webhook <url>
+  $ omc config-stop-callback file --disable
+  $ omc config-stop-callback file --show`)
+  .action(async (type: string, options) => {
+    const validTypes = ['file', 'telegram', 'discord'];
+    if (!validTypes.includes(type)) {
+      console.error(chalk.red(`Invalid callback type: ${type}`));
+      console.error(chalk.gray(`Valid types: ${validTypes.join(', ')}`));
+      process.exit(1);
+    }
+
+    const config = getSisyphusConfig();
+    config.stopHookCallbacks = config.stopHookCallbacks || {};
+
+    // Show current config
+    if (options.show) {
+      const current = config.stopHookCallbacks[type as keyof typeof config.stopHookCallbacks];
+      if (current) {
+        console.log(chalk.blue(`Current ${type} callback configuration:`));
+        console.log(JSON.stringify(current, null, 2));
+      } else {
+        console.log(chalk.yellow(`No ${type} callback configured.`));
+      }
+      return;
+    }
+
+    // Determine enabled state
+    let enabled: boolean | undefined;
+    if (options.enable) {
+      enabled = true;
+    } else if (options.disable) {
+      enabled = false;
+    }
+
+    // Update config based on type
+    switch (type) {
+      case 'file': {
+        const current = config.stopHookCallbacks.file;
+        config.stopHookCallbacks.file = {
+          enabled: enabled ?? current?.enabled ?? false,
+          path: options.path ?? current?.path ?? '~/.claude/session-logs/{session_id}.md',
+          format: (options.format as 'markdown' | 'json') ?? current?.format ?? 'markdown',
+        };
+        break;
+      }
+
+      case 'telegram': {
+        const current = config.stopHookCallbacks.telegram;
+        if (enabled === true && (!options.token && !current?.botToken)) {
+          console.error(chalk.red('Telegram requires --token <bot_token>'));
+          process.exit(1);
+        }
+        if (enabled === true && (!options.chat && !current?.chatId)) {
+          console.error(chalk.red('Telegram requires --chat <chat_id>'));
+          process.exit(1);
+        }
+        config.stopHookCallbacks.telegram = {
+          enabled: enabled ?? current?.enabled ?? false,
+          botToken: options.token ?? current?.botToken,
+          chatId: options.chat ?? current?.chatId,
+        };
+        break;
+      }
+
+      case 'discord': {
+        const current = config.stopHookCallbacks.discord;
+        if (enabled === true && (!options.webhook && !current?.webhookUrl)) {
+          console.error(chalk.red('Discord requires --webhook <webhook_url>'));
+          process.exit(1);
+        }
+        config.stopHookCallbacks.discord = {
+          enabled: enabled ?? current?.enabled ?? false,
+          webhookUrl: options.webhook ?? current?.webhookUrl,
+        };
+        break;
+      }
+    }
+
+    // Write config
+    try {
+      writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf-8');
+      console.log(chalk.green(`\u2713 Stop callback '${type}' configured`));
+      console.log(JSON.stringify(config.stopHookCallbacks[type as keyof typeof config.stopHookCallbacks], null, 2));
+    } catch (error) {
+      console.error(chalk.red('Failed to write configuration:'), error);
+      process.exit(1);
+    }
   });
 
 /**

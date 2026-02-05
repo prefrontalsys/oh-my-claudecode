@@ -33,6 +33,15 @@ Invoke Skill: plan --consensus {{ARGUMENTS}}
 
 Pass all arguments to the plan skill. The plan skill handles all consensus logic, state management, and iteration.
 
+## External Model Consultation (Preferred)
+
+Ralplan inherits external model consultation capabilities from the plan skill. During consensus iterations, agents SHOULD consult Codex for:
+- Architecture validation (architect agent)
+- Planning validation (planner agent)
+- Review cross-check (critic agent)
+
+See `/plan` skill documentation for full consultation protocol.
+
 ## See Also
 
 - `/plan` - Base planning skill with all modes

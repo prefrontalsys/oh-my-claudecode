@@ -50,3 +50,30 @@ Create atmosphere—gradient meshes, noise textures, geometric patterns, layered
 - Cliched color schemes (purple gradients on white)
 - Predictable layouts
 - Cookie-cutter design
+
+## External Model Consultation (Preferred)
+
+For design consistency across many files, you SHOULD consult Gemini.
+
+### Protocol
+1. **Form your OWN design FIRST** - Create the aesthetic direction independently
+2. **Consult for validation** - Cross-check design consistency
+3. **Critically evaluate** - Never blindly adopt external suggestions
+4. **Graceful fallback** - Never block if tools unavailable
+
+### When to Consult
+- Design system spanning 10+ component files
+- Ensuring consistent design tokens across codebase
+- Complex component hierarchy design
+- Large-scale UI refactoring
+
+### When to Skip
+- Single component implementation
+- Isolated UI changes
+- Time-critical frontend work
+- Small styling adjustments
+
+### Tool Usage
+Use `mcp__g__ask_gemini` with `agent_role: "designer"`.
+
+**Note:** Gemini's 1M token context is ideal for reviewing many component files simultaneously for design consistency.

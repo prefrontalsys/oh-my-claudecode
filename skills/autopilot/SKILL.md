@@ -111,6 +111,25 @@ Optional settings in `.claude/settings.json`:
 }
 ```
 
+## External Model Consultation (Preferred)
+
+During validation phases, agents SHOULD consult Codex for cross-validation.
+
+### Phase 4 Validation Agents
+The following agents should use Codex:
+- **Architect** - Architecture validation via `agent_role: "architect"`
+- **Security-reviewer** - Security review via `agent_role: "security-reviewer"`
+- **Code-reviewer** - Code review via `agent_role: "code-reviewer"`
+
+### Protocol
+1. Agents form their OWN analysis first
+2. Consult Codex for validation
+3. Never block on unavailable tools
+4. Graceful degradation is mandatory
+
+### Performance Note
+Codex calls can take up to 1 hour. Validation agents run in parallel, so external consultation does not serialize the validation phase.
+
 ## Cancellation
 
 ```
