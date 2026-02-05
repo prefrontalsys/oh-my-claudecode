@@ -333,6 +333,10 @@ OMC provides optional integration with external AI CLIs via MCP servers for cros
 | `planner` | `ask_codex` | Validate task breakdown feasibility, effort estimation |
 | `critic` | `ask_codex` | "Can you implement this task from these instructions alone?" simulation |
 | `architect` | `ask_codex` | Second opinion on debugging hypotheses, architecture trade-offs |
+| `code-reviewer` | `ask_codex` | Cross-validate code review findings, catch missed issues |
+| `code-reviewer-low` | `ask_codex` | Quick second opinion on small code changes |
+| `security-reviewer` | `ask_codex` | Validate vulnerability assessments, verify OWASP findings |
+| `security-reviewer-low` | `ask_codex` | Quick security scan validation |
 | `designer` | `ask_gemini` | Design system consistency analysis across many component files |
 | `designer-high` | `ask_gemini` | Large-scale UI architecture reviews leveraging 1M token context |
 

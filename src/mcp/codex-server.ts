@@ -19,7 +19,7 @@ const CODEX_DEFAULT_MODEL = process.env.OMC_CODEX_DEFAULT_MODEL || 'gpt-5.2';
 const CODEX_TIMEOUT = parseInt(process.env.OMC_CODEX_TIMEOUT || '60000', 10);
 
 // Codex is best for analytical/planning tasks
-const CODEX_VALID_ROLES = ['architect', 'planner', 'critic'] as const;
+const CODEX_VALID_ROLES = ['architect', 'planner', 'critic', 'code-reviewer', 'code-reviewer-low', 'security-reviewer', 'security-reviewer-low'] as const;
 
 /**
  * Parse Codex JSONL output to extract the final text response
@@ -98,7 +98,7 @@ function executeCodex(prompt: string, model: string): Promise<string> {
 // Define the ask_codex tool using the SDK tool() helper
 const askCodexTool = tool(
   "ask_codex",
-  "Send a prompt to OpenAI Codex CLI for analytical/planning tasks. Codex excels at architecture review, planning validation, and critical analysis. Requires agent_role (architect, planner, or critic). Requires Codex CLI (npm install -g @openai/codex).",
+  "Send a prompt to OpenAI Codex CLI for analytical/planning tasks. Codex excels at architecture review, planning validation, critical analysis, and code/security review validation. Requires agent_role to specify the perspective (architect, planner, critic, code-reviewer, code-reviewer-low, security-reviewer, or security-reviewer-low). Requires Codex CLI (npm install -g @openai/codex).",
   {
     prompt: { type: "string", description: "The prompt to send to Codex" },
     agent_role: { type: "string", description: `Required. Agent perspective for Codex: ${CODEX_VALID_ROLES.join(', ')}. Codex is optimized for analytical/planning tasks.` },
