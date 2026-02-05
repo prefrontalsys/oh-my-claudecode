@@ -20,6 +20,7 @@ describe('prompt_file-only enforcement', () => {
     it('should return error when deprecated prompt parameter is used', async () => {
       const result = await handleAskCodex({
         prompt_file: '',
+        output_file: '/tmp/test-output.md',
         agent_role: 'architect',
         ...({ prompt: 'test prompt' } as any),
       });
@@ -52,6 +53,7 @@ describe('prompt_file-only enforcement', () => {
     it('should return error when deprecated prompt parameter is used', async () => {
       const result = await handleAskGemini({
         prompt_file: '',
+        output_file: '/tmp/test-output.md',
         agent_role: 'designer',
         ...({ prompt: 'test prompt' } as any),
       });
