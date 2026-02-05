@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.4] - 2026-02-05
+
+### Fixed
+
+- **Hook Field Name Compatibility** - All 11 hook scripts + 5 templates updated to read snake_case field names (`tool_name`, `tool_input`, `tool_response`, `session_id`, `cwd`) with camelCase fallback. Claude Code sends snake_case but hooks were only reading camelCase, causing silent empty values.
+- **Hook Error Display Noise** - PostToolUse hooks now return `suppressOutput: true` when no meaningful message, reducing "hook error" display noise from Claude Code display bug ([#10936](https://github.com/anthropics/claude-code/issues/10936)).
+
 ## [4.0.3] - 2026-02-05
 
 ### Fixed
