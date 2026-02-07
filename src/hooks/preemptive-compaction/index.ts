@@ -85,6 +85,13 @@ function cleanupSessionStates(): void {
       lastAnalysisTime.delete(sessionId);
     }
   }
+
+  // Clean orphaned debounce entries
+  for (const sessionId of lastAnalysisTime.keys()) {
+    if (!sessionStates.has(sessionId)) {
+      lastAnalysisTime.delete(sessionId);
+    }
+  }
 }
 
 // Run cleanup periodically

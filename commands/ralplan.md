@@ -94,7 +94,7 @@ Ralplan maintains persistent state in `.omc/ralplan-state.json` to track progres
 }
 ```
 
-**Phases**: `planner_planning` → `architect_consultation` → `critic_review` → `handling_verdict` → `awaiting_user_approval` → `complete`
+**Phases**: `planner_planning` → `architect_consultation` → `critic_review` → `handling_verdict` → `awaiting_user_approval` → `complete` | `cancelled`
 
 ## Plan Mode Interaction (CRITICAL)
 
@@ -219,6 +219,7 @@ Based on Critic's verdict, the skill either proceeds to user approval or continu
 4. **NEVER** invoke `/oh-my-claudecode:ralph` or any execution mode without user consent
 5. **ALWAYS** use `AskUserQuestion` tool to get explicit user decision
 6. **ALWAYS** wait for user response before taking any action
+7. **IF** `AskUserQuestion` tool is unavailable or fails, **HALT** execution with a clear message and persist state as `awaiting_user_approval`. Do NOT fall back to autonomous execution. Do NOT assume consent.
 
 **Update state:** Set `current_phase: "awaiting_user_approval"`
 
@@ -239,9 +240,10 @@ Based on Critic's verdict, the skill either proceeds to user approval or continu
 | User Decision | Action |
 |---------------|--------|
 | **Proceed** | Set state `active: false, current_phase: "complete"`. Tell user to run `/oh-my-claudecode:ralph` with the plan path, OR invoke it if user explicitly requests |
-| **Adjust** | Return to Planner Planning phase with user's adjustment feedback. Reset iteration if needed |
+| **Adjust** | Return to Planner Planning phase with user's adjustment feedback. Preserve current iteration count (do NOT reset to 0). The existing iteration count continues to enforce the max_iterations safety limit |
 | **Discard** | Set state `active: false, current_phase: "cancelled"`. Log cancellation. Do NOT execute anything |
 | **No response / Silence** | WAIT. Do NOT proceed. Do NOT assume consent |
+| **Session restart / Timeout** | On session restart, if state shows `current_phase: "awaiting_user_approval"`, resume by re-presenting the plan and `AskUserQuestion` prompt. Do NOT auto-continue to execution. The approval gate persists across sessions |
 
 ## Iteration Rules
 
@@ -334,6 +336,8 @@ To stop an active ralplan session:
 - Spawning executor agents
 - Invoking `/oh-my-claudecode:ralph` or any execution mode
 - Writing to any source code files
+- Invoking any hook or tool that triggers workspace mutation (e.g., build scripts, deployment hooks)
+- Writing state that triggers downstream auto-execution in other modes (e.g., setting ralph state to active)
 - Any codebase mutation whatsoever
 
 The iterative loop refines the plan until it meets the rigorous standards of all three agents. After consensus, the plan is presented to the user for final approval before any implementation begins.

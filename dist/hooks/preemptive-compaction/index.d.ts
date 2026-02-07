@@ -12,6 +12,15 @@
  */
 import type { ContextUsageResult, PreemptiveCompactionConfig } from './types.js';
 /**
+ * Rapid-fire debounce window (ms).
+ * When multiple tool outputs arrive within this window (e.g. simultaneous
+ * subagent completions in swarm/ultrawork), only the first triggers
+ * context analysis. Subsequent calls within the window are skipped.
+ * This is much shorter than COMPACTION_COOLDOWN_MS (which debounces warnings)
+ * and specifically targets the concurrent flood scenario (issue #453).
+ */
+declare const RAPID_FIRE_DEBOUNCE_MS = 500;
+/**
  * Estimate tokens from text content
  */
 export declare function estimateTokens(text: string): number;
@@ -50,6 +59,11 @@ export declare function getSessionTokenEstimate(sessionId: string): number;
  * Reset token estimate for a session (e.g., after compaction)
  */
 export declare function resetSessionTokenEstimate(sessionId: string): void;
+/**
+ * Clear the rapid-fire debounce state for a session (for testing).
+ */
+export declare function clearRapidFireDebounce(sessionId: string): void;
 export type { ContextUsageResult, PreemptiveCompactionConfig, } from './types.js';
+export { RAPID_FIRE_DEBOUNCE_MS };
 export { DEFAULT_THRESHOLD, CRITICAL_THRESHOLD, COMPACTION_COOLDOWN_MS, MAX_WARNINGS, CLAUDE_DEFAULT_CONTEXT_LIMIT, CHARS_PER_TOKEN, CONTEXT_WARNING_MESSAGE, CONTEXT_CRITICAL_MESSAGE, } from './constants.js';
 //# sourceMappingURL=index.d.ts.map

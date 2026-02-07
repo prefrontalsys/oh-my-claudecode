@@ -126,9 +126,28 @@ export function getGlobalStateFilePath(mode) {
  */
 function isJsonModeActive(cwd, mode, sessionId) {
     const config = MODE_CONFIGS[mode];
-    const stateFile = sessionId && !config.isSqlite
+    const sessionStateFile = sessionId && !config.isSqlite
         ? resolveSessionStatePath(mode, sessionId, cwd)
-        : getStateFilePath(cwd, mode);
+        : null;
+    const stateFile = sessionStateFile ?? getStateFilePath(cwd, mode);
+    // Session fallback: if session-scoped state is missing, check legacy shared path
+    if (sessionStateFile && !existsSync(sessionStateFile)) {
+        const legacyStateFile = getStateFilePath(cwd, mode);
+        if (!existsSync(legacyStateFile)) {
+            return false;
+        }
+        try {
+            const content = readFileSync(legacyStateFile, 'utf-8');
+            const state = JSON.parse(content);
+            if (config.activeProperty) {
+                return state[config.activeProperty] === true;
+            }
+            return true;
+        }
+        catch {
+            return false;
+        }
+    }
     if (!existsSync(stateFile)) {
         return false;
     }
@@ -301,6 +320,8 @@ export function clearModeState(mode, cwd, sessionId) {
                 success = false;
             }
         }
+        // Session-scoped clear should not touch legacy/marker files
+        return success;
     }
     // Delete local state file (legacy path)
     const stateFile = getStateFilePath(cwd, mode);

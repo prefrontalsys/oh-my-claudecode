@@ -1,6 +1,6 @@
 ---
 name: cancel
-description: Cancel any active OMC mode (autopilot, ralph, ultrawork, ecomode, ultraqa, swarm, ultrapilot, pipeline)
+description: Cancel any active OMC mode (autopilot, ralph, ultrawork, ecomode, ultraqa, swarm, ultrapilot, pipeline, team)
 ---
 
 # Cancel Skill
@@ -24,6 +24,7 @@ Automatically detects which mode is active and cancels it:
 - **Swarm**: Stops coordinated agent swarm, releases claimed tasks
 - **Ultrapilot**: Stops parallel autopilot workers
 - **Pipeline**: Stops sequential agent pipeline
+- **Team**: Sends shutdown_request to all teammates, waits for responses, calls TeamDelete
 
 ## Usage
 
@@ -46,6 +47,7 @@ The skill checks state files to determine what's active:
 - `.omc/state/pipeline-state.json` → Pipeline detected
 - `.omc/state/plan-consensus.json` → Plan Consensus detected
 - `.omc/state/ralplan-state.json` → Plan Consensus detected (legacy)
+- `~/.claude/teams/*/config.json` → Team detected (Claude Code native team)
 
 If multiple modes are active, they're cancelled in order of dependency:
 1. Autopilot (includes ralph/ultraqa/ecomode cleanup)
@@ -56,7 +58,8 @@ If multiple modes are active, they're cancelled in order of dependency:
 6. Swarm (standalone)
 7. Ultrapilot (standalone)
 8. Pipeline (standalone)
-9. Plan Consensus (standalone)
+9. Team (Claude Code native)
+10. Plan Consensus (standalone)
 
 ## Force Clear All
 
@@ -184,6 +187,13 @@ if [[ "$FORCE_MODE" == "true" ]]; then
   rm -f .omc/state/rate-limit-daemon.log
   rm -rf .omc/state/checkpoints/
 
+  # Remove team state and attempt cleanup
+  rm -f .omc/state/team-state.json
+  # Attempt TeamDelete for any existing teams (best-effort)
+  # If TeamDelete fails, manually remove:
+  #   rm -rf ~/.claude/teams/*/
+  #   rm -rf ~/.claude/tasks/*/
+
   # Stop rate-limit daemon if running
   if [[ -f .omc/state/rate-limit-daemon.pid ]]; then
     kill "$(cat .omc/state/rate-limit-daemon.pid)" 2>/dev/null || true
@@ -196,6 +206,69 @@ fi
 ```
 
 ### 3B. Smart Cancellation (default)
+
+#### If Team Active (Claude Code native)
+
+Teams are detected by checking for config files in `~/.claude/teams/`:
+
+```bash
+# Check for active teams
+TEAM_CONFIGS=$(find ~/.claude/teams -name config.json -maxdepth 2 2>/dev/null)
+```
+
+**Two-pass cancellation protocol:**
+
+**Pass 1: Graceful Shutdown**
+```
+For each team found in ~/.claude/teams/:
+  1. Read config.json to get team_name and members list
+  2. For each non-lead member:
+     a. Send shutdown_request via SendMessage
+     b. Wait up to 15 seconds for shutdown_response
+     c. If response received: member terminates and is auto-removed
+     d. If timeout: mark member as unresponsive, continue to next
+  3. Log: "Graceful pass: X/Y members responded"
+```
+
+**Pass 2: Reconciliation**
+```
+After graceful pass:
+  1. Re-read config.json to check remaining members
+  2. If only lead remains (or config is empty): proceed to TeamDelete
+  3. If unresponsive members remain:
+     a. Wait 5 more seconds (they may still be processing)
+     b. Re-read config.json again
+     c. If still stuck: attempt TeamDelete anyway
+     d. If TeamDelete fails: report manual cleanup path
+```
+
+**TeamDelete + Cleanup:**
+```
+  1. Call TeamDelete() — removes ~/.claude/teams/{name}/ and ~/.claude/tasks/{name}/
+  2. Remove local state: rm -f .omc/state/team-state.json
+  3. Emit structured cancel report
+```
+
+**Structured Cancel Report:**
+```
+Team "{team_name}" cancelled:
+  - Members signaled: N
+  - Responses received: M
+  - Unresponsive: K (list names if any)
+  - TeamDelete: success/failed
+  - Manual cleanup needed: yes/no
+    Path: ~/.claude/teams/{name}/ and ~/.claude/tasks/{name}/
+```
+
+**Implementation note:** The cancel skill is executed by the LLM, not as a bash script. When you detect an active team:
+1. Read `~/.claude/teams/*/config.json` to find active teams
+2. If multiple teams exist, cancel oldest first (by `createdAt`)
+3. For each non-lead member, call `SendMessage(type: "shutdown_request", recipient: member-name, content: "Cancelling")`
+4. Wait briefly for shutdown responses (15s per member timeout)
+5. Re-read config.json to check for remaining members (reconciliation pass)
+6. Call `TeamDelete()` to clean up
+7. Remove any local state: `rm -f .omc/state/team-state.json`
+8. Report structured summary to user
 
 #### If Autopilot Active
 
@@ -635,6 +708,7 @@ fi
 | Swarm | "Swarm cancelled. Coordinated agents stopped." |
 | Ultrapilot | "Ultrapilot cancelled. Parallel autopilot workers stopped." |
 | Pipeline | "Pipeline cancelled. Sequential agent chain stopped." |
+| Team | "Team cancelled. Teammates shut down and cleaned up." |
 | Plan Consensus | "Plan Consensus cancelled. Planning session ended." |
 | Force | "All OMC modes cleared. You are free to start fresh." |
 | None | "No active OMC modes detected." |
@@ -659,3 +733,4 @@ fi
 - **Safe**: Only clears linked Ultrawork, preserves standalone Ultrawork
 - **Local-only**: Clears state files in `.omc/state/` directory
 - **Resume-friendly**: Autopilot state is preserved for seamless resume
+- **Team-aware**: Detects native Claude Code teams and performs graceful shutdown

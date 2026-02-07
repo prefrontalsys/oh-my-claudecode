@@ -103,21 +103,15 @@ function activateState(directory, prompt, stateName, sessionId) {
       try { mkdirSync(sessionDir, { recursive: true }); } catch {}
     }
     try { writeFileSync(join(sessionDir, `${stateName}-state.json`), JSON.stringify(state, null, 2), { mode: 0o600 }); } catch {}
+    return; // Session-only write, skip legacy
   }
 
-  // Also write to legacy local .omc/state directory (backward compat)
+  // Fallback: write to legacy local .omc/state directory (no valid sessionId)
   const localDir = join(directory, '.omc', 'state');
   if (!existsSync(localDir)) {
     try { mkdirSync(localDir, { recursive: true }); } catch {}
   }
   try { writeFileSync(join(localDir, `${stateName}-state.json`), JSON.stringify(state, null, 2), { mode: 0o600 }); } catch {}
-
-  // Write to global .omc/state directory
-  const globalDir = join(homedir(), '.omc', 'state');
-  if (!existsSync(globalDir)) {
-    try { mkdirSync(globalDir, { recursive: true }); } catch {}
-  }
-  try { writeFileSync(join(globalDir, `${stateName}-state.json`), JSON.stringify(state, null, 2), { mode: 0o600 }); } catch {}
 }
 
 /**

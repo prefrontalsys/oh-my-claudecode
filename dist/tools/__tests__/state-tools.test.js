@@ -67,7 +67,7 @@ describe('state-tools', () => {
                 mode: 'ralplan',
                 workingDirectory: TEST_DIR,
             });
-            expect(result.content[0].text).toContain('Successfully cleared');
+            expect(result.content[0].text).toContain('Cleared state for mode: ralplan');
             expect(existsSync(statePath)).toBe(false);
         });
     });

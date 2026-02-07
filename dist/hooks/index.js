@@ -62,7 +62,7 @@ readMessages as readRecoveryMessages, readParts as readRecoveryParts, findEmptyM
 TOKEN_LIMIT_PATTERNS, TOKEN_LIMIT_KEYWORDS, CONTEXT_LIMIT_RECOVERY_MESSAGE, CONTEXT_LIMIT_SHORT_MESSAGE, NON_EMPTY_CONTENT_RECOVERY_MESSAGE, TRUNCATION_APPLIED_MESSAGE, RECOVERY_FAILED_MESSAGE, EDIT_ERROR_PATTERNS, EDIT_ERROR_REMINDER, RETRY_CONFIG, TRUNCATE_CONFIG, RECOVERY_MESSAGES, PLACEHOLDER_TEXT as RECOVERY_PLACEHOLDER_TEXT } from './recovery/index.js';
 export { 
 // Preemptive Compaction
-createPreemptiveCompactionHook, estimateTokens, analyzeContextUsage, getSessionTokenEstimate, resetSessionTokenEstimate, DEFAULT_THRESHOLD as PREEMPTIVE_DEFAULT_THRESHOLD, CRITICAL_THRESHOLD, COMPACTION_COOLDOWN_MS, MAX_WARNINGS, CLAUDE_DEFAULT_CONTEXT_LIMIT, CHARS_PER_TOKEN, CONTEXT_WARNING_MESSAGE, CONTEXT_CRITICAL_MESSAGE } from './preemptive-compaction/index.js';
+createPreemptiveCompactionHook, estimateTokens, analyzeContextUsage, getSessionTokenEstimate, resetSessionTokenEstimate, clearRapidFireDebounce, RAPID_FIRE_DEBOUNCE_MS, DEFAULT_THRESHOLD as PREEMPTIVE_DEFAULT_THRESHOLD, CRITICAL_THRESHOLD, COMPACTION_COOLDOWN_MS, MAX_WARNINGS, CLAUDE_DEFAULT_CONTEXT_LIMIT, CHARS_PER_TOKEN, CONTEXT_WARNING_MESSAGE, CONTEXT_CRITICAL_MESSAGE } from './preemptive-compaction/index.js';
 export { 
 // Background Notification
 createBackgroundNotificationHook, processBackgroundNotification, processBackgroundNotificationHook, checkBackgroundNotifications, handleBackgroundEvent, HOOK_NAME as BACKGROUND_NOTIFICATION_HOOK_NAME } from './background-notification/index.js';
@@ -127,7 +127,7 @@ export {
 processSubagentStart, processSubagentStop, handleSubagentStart, handleSubagentStop, readTrackingState, writeTrackingState, getStateFilePath as getSubagentStateFilePath, getStaleAgents, cleanupStaleAgents, getActiveAgentCount, getAgentsByType, getRunningAgents, getTrackingStats, clearTrackingState } from './subagent-tracker/index.js';
 export { 
 // PreCompact Hook
-processPreCompact, getCheckpointPath, exportWisdomToNotepad, saveModeSummary, createCompactCheckpoint, formatCompactSummary as formatPreCompactSummary } from './pre-compact/index.js';
+processPreCompact, getCheckpointPath, exportWisdomToNotepad, saveModeSummary, createCompactCheckpoint, formatCompactSummary as formatPreCompactSummary, isCompactionInProgress, getCompactionQueueDepth } from './pre-compact/index.js';
 export { 
 // Permission Handler Hook
 processPermissionRequest, handlePermissionRequest, isSafeCommand, isActiveModeRunning } from './permission-handler/index.js';

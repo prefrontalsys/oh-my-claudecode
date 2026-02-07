@@ -3,6 +3,15 @@ name: swarm
 description: N coordinated agents on shared task list with SQLite-based atomic claiming
 ---
 
+> **DEPRECATED**: This skill has been replaced by `/oh-my-claudecode:team` which uses Claude Code's native team tools (TeamCreate, SendMessage, TaskCreate). Native teams provide:
+> - Real-time inter-agent messaging (SendMessage)
+> - Built-in task dependencies (blocks/blockedBy)
+> - Graceful shutdown protocol (shutdown_request/response)
+> - Zero external dependencies (no SQLite/better-sqlite3 needed)
+>
+> Use `/oh-my-claudecode:team N:agent-type "task"` instead.
+> This file is preserved for reference only.
+
 # Swarm Skill
 
 Spawn N coordinated agents working on a shared task list with SQLite-based atomic claiming. Like a dev team tackling multiple files in parallel—fast, reliable, and with full fault tolerance.

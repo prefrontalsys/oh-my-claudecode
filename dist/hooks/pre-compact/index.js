@@ -17,6 +17,22 @@ import { initJobDb, getActiveJobs, getRecentJobs, getJobStats } from '../../mcp/
 // ============================================================================
 const CHECKPOINT_DIR = "checkpoints";
 // ============================================================================
+// Compaction Mutex - prevents concurrent compaction for the same directory
+// ============================================================================
+/**
+ * Per-directory in-flight compaction promises.
+ * When a compaction is already running for a directory, new callers
+ * await the existing promise instead of running concurrently.
+ * This prevents race conditions when multiple subagent results
+ * arrive simultaneously (swarm/ultrawork).
+ */
+const inflightCompactions = new Map();
+/**
+ * Queue depth counter per directory for diagnostics.
+ * Tracks how many callers are waiting on an in-flight compaction.
+ */
+const compactionQueueDepth = new Map();
+// ============================================================================
 // Helper Functions
 // ============================================================================
 /**
@@ -367,9 +383,10 @@ export function formatCompactSummary(checkpoint) {
     return lines.join("\n");
 }
 /**
- * Main handler for PreCompact hook
+ * Internal compaction logic (unserialized).
+ * Callers must go through processPreCompact which enforces the mutex.
  */
-export async function processPreCompact(input) {
+async function doProcessPreCompact(input) {
     const directory = input.cwd;
     // Create checkpoint
     const checkpoint = await createCompactCheckpoint(directory, input.trigger);
@@ -404,6 +421,59 @@ export async function processPreCompact(input) {
         continue: true,
         systemMessage: summary,
     };
+}
+/**
+ * Main handler for PreCompact hook.
+ *
+ * Uses a per-directory mutex to prevent concurrent compaction.
+ * When multiple subagent results arrive simultaneously (swarm/ultrawork),
+ * only the first call runs the compaction; subsequent calls await
+ * the in-flight result. This fixes issue #453.
+ */
+export async function processPreCompact(input) {
+    const directory = input.cwd;
+    // If compaction is already in progress for this directory, coalesce
+    const inflight = inflightCompactions.get(directory);
+    if (inflight) {
+        const depth = (compactionQueueDepth.get(directory) ?? 0) + 1;
+        compactionQueueDepth.set(directory, depth);
+        try {
+            // Await the existing compaction result
+            return await inflight;
+        }
+        finally {
+            const current = compactionQueueDepth.get(directory) ?? 1;
+            if (current <= 1) {
+                compactionQueueDepth.delete(directory);
+            }
+            else {
+                compactionQueueDepth.set(directory, current - 1);
+            }
+        }
+    }
+    // No in-flight compaction — run it and register the promise
+    const compactionPromise = doProcessPreCompact(input);
+    inflightCompactions.set(directory, compactionPromise);
+    try {
+        return await compactionPromise;
+    }
+    finally {
+        inflightCompactions.delete(directory);
+    }
+}
+/**
+ * Check if compaction is currently in progress for a directory.
+ * Useful for diagnostics and testing.
+ */
+export function isCompactionInProgress(directory) {
+    return inflightCompactions.has(directory);
+}
+/**
+ * Get the number of callers queued behind an in-flight compaction.
+ * Returns 0 if no compaction is in progress.
+ */
+export function getCompactionQueueDepth(directory) {
+    return compactionQueueDepth.get(directory) ?? 0;
 }
 // ============================================================================
 // Exports

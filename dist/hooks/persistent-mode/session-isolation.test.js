@@ -37,7 +37,7 @@ describe("Persistent Mode Session Isolation (Issue #311)", () => {
         it("should NOT block after ultrawork is deactivated", async () => {
             const sessionId = "session-done";
             activateUltrawork("Task complete", sessionId, tempDir);
-            deactivateUltrawork(tempDir);
+            deactivateUltrawork(tempDir, sessionId);
             const result = await checkPersistentModes(sessionId, tempDir);
             expect(result.shouldBlock).toBe(false);
         });

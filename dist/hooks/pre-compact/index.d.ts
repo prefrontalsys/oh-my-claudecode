@@ -110,8 +110,23 @@ export declare function createCompactCheckpoint(directory: string, trigger: "man
  */
 export declare function formatCompactSummary(checkpoint: CompactCheckpoint): string;
 /**
- * Main handler for PreCompact hook
+ * Main handler for PreCompact hook.
+ *
+ * Uses a per-directory mutex to prevent concurrent compaction.
+ * When multiple subagent results arrive simultaneously (swarm/ultrawork),
+ * only the first call runs the compaction; subsequent calls await
+ * the in-flight result. This fixes issue #453.
  */
 export declare function processPreCompact(input: PreCompactInput): Promise<HookOutput>;
+/**
+ * Check if compaction is currently in progress for a directory.
+ * Useful for diagnostics and testing.
+ */
+export declare function isCompactionInProgress(directory: string): boolean;
+/**
+ * Get the number of callers queued behind an in-flight compaction.
+ * Returns 0 if no compaction is in progress.
+ */
+export declare function getCompactionQueueDepth(directory: string): number;
 export default processPreCompact;
 //# sourceMappingURL=index.d.ts.map

@@ -21196,7 +21196,24 @@ function getMarkerFilePath(cwd, mode) {
 }
 function isJsonModeActive(cwd, mode, sessionId) {
   const config2 = MODE_CONFIGS[mode];
-  const stateFile = sessionId && !config2.isSqlite ? resolveSessionStatePath(mode, sessionId, cwd) : getStateFilePath(cwd, mode);
+  const sessionStateFile = sessionId && !config2.isSqlite ? resolveSessionStatePath(mode, sessionId, cwd) : null;
+  const stateFile = sessionStateFile ?? getStateFilePath(cwd, mode);
+  if (sessionStateFile && !(0, import_fs7.existsSync)(sessionStateFile)) {
+    const legacyStateFile = getStateFilePath(cwd, mode);
+    if (!(0, import_fs7.existsSync)(legacyStateFile)) {
+      return false;
+    }
+    try {
+      const content = (0, import_fs7.readFileSync)(legacyStateFile, "utf-8");
+      const state = JSON.parse(content);
+      if (config2.activeProperty) {
+        return state[config2.activeProperty] === true;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
   if (!(0, import_fs7.existsSync)(stateFile)) {
     return false;
   }
@@ -21269,6 +21286,7 @@ function clearModeState(mode, cwd, sessionId) {
         success = false;
       }
     }
+    return success;
   }
   const stateFile = getStateFilePath(cwd, mode);
   if ((0, import_fs7.existsSync)(stateFile)) {

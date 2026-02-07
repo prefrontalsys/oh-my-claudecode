@@ -26,6 +26,8 @@ Invokes the plan skill with --consensus mode, which:
 
 **CRITICAL:** Ralplan NEVER proceeds to implementation (branching, code execution, or file modification) without explicit user approval. After Critic consensus, the user is always asked to Proceed, Adjust, or Discard.
 
+**State:** After Critic consensus, state transitions to `awaiting_user_approval`. User choices: **Proceed** (execute), **Adjust** (re-plan), or **Discard** (cancel). No response = wait indefinitely.
+
 ## Implementation
 
 When this skill is invoked, immediately invoke the plan skill with consensus mode:

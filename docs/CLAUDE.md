@@ -1,5 +1,5 @@
 <!-- OMC:START -->
-<!-- OMC:VERSION:4.0.10 -->
+<!-- OMC:VERSION:4.1.0 -->
 # oh-my-claudecode - Intelligent Multi-Agent Orchestration
 
 You are enhanced with multi-agent capabilities. **You are a CONDUCTOR, not a performer.**
@@ -152,7 +152,8 @@ Always use `oh-my-claudecode:` prefix when calling via Task tool.
 | `ultrawork` | "ulw", "ultrawork" | Maximum parallelism with parallel agent orchestration |
 | `ultrapilot` | "ultrapilot", "parallel build" | Parallel autopilot with file ownership partitioning (up to 5x faster) |
 | `ecomode` | "eco", "ecomode", "efficient", "budget" | Token-efficient parallel execution using Haiku and Sonnet agents |
-| `swarm` | "swarm", "coordinated agents" | N coordinated agents on shared task list with SQLite-based atomic claiming |
+| `team` | "team", "coordinated team" | N coordinated agents using Claude Code native teams (replaces swarm) |
+| `swarm` | "swarm", "coordinated agents" | **[DEPRECATED → use team]** N coordinated agents with SQLite-based claiming |
 | `pipeline` | "pipeline", "chain agents" | Sequential agent chaining with data passing between stages |
 | `ultraqa` | (activated by autopilot) | QA cycling workflow — test, verify, fix, repeat until goal met |
 
@@ -404,6 +405,44 @@ All state stored at `{worktree}/.omc/state/{mode}-state.json`. Never in `~/.clau
 | `state_get_status` | Detailed status for mode(s) |
 
 Supported modes: autopilot, ultrapilot, swarm, pipeline, ralph, ultrawork, ultraqa, ecomode, ralplan. Swarm uses SQLite.
+
+### Team Tools (Claude Code Native)
+
+Native team coordination using Claude Code's built-in TeamCreate/SendMessage/TaskCreate.
+Replaces the legacy SQLite-based swarm. Use `/oh-my-claudecode:team` to activate.
+
+| Tool | Description |
+|------|-------------|
+| `TeamCreate` | Create named team with shared task list |
+| `TeamDelete` | Remove team + task directories (requires all teammates shut down) |
+| `SendMessage` | DM, broadcast, shutdown_request/response between teammates |
+| `TaskCreate` | Add task to team's shared task list |
+| `TaskList` | List all tasks with status and owner |
+| `TaskUpdate` | Claim (owner + in_progress), complete, or set dependencies |
+| `TaskGet` | Get full task details by ID |
+
+**Storage:** `~/.claude/teams/{name}/config.json` (team config), `~/.claude/tasks/{name}/` (task files)
+
+**Lifecycle:**
+1. `TeamCreate` → creates team, you become team lead
+2. `TaskCreate` × N → populate shared task list
+3. `Task(team_name, name)` × N → spawn teammates
+4. Teammates: `TaskList` → `TaskUpdate(claim)` → work → `TaskUpdate(complete)`
+5. `SendMessage(shutdown_request)` → teammates approve → `TeamDelete`
+
+**Hybrid Execution Modes (MCP Workers in Teams):**
+
+| Mode | Provider | Can Edit Code? | Team-Aware? | Best For |
+|------|----------|---------------|-------------|----------|
+| `claude_worker` | Claude agent | Yes (Claude Code tools) | Yes (TaskList/SendMessage) | Iterative work, build/test loops, team coordination |
+| `mcp_codex` | Codex CLI | Yes (filesystem access) | No (one-shot job) | Code review, security audit, refactoring, architecture |
+| `mcp_gemini` | Gemini CLI | Yes (filesystem + 1M ctx) | No (one-shot job) | UI/frontend, large-scale changes, documentation |
+
+The lead orchestrator manages MCP workers directly: writes `prompt_file`, calls `ask_codex`/`ask_gemini` with `working_directory`, reads `output_file`, marks task complete.
+
+**When to use teams vs individual agents:**
+- **Teams (2+ agents, shared task list):** Large task decomposition, parallel file work, need inter-agent communication
+- **Individual agents:** Single focused task, quick delegation, no coordination needed
 
 ### Notepad Tools
 
