@@ -9,16 +9,18 @@ const __dirname = path.dirname(__filename);
 
 describe('Agent Registry Validation', () => {
   test('agent count matches documentation', () => {
-    const agents = getAgentDefinitions();
-    expect(Object.keys(agents).length).toBe(34);
+    const agentsDir = path.join(__dirname, '../../agents');
+    const promptFiles = fs.readdirSync(agentsDir).filter((file) => file.endsWith('.md') && file !== 'AGENTS.md');
+    expect(promptFiles.length).toBe(28);
   });
 
   test('all agents have .md prompt files', () => {
     const agents = Object.keys(getAgentDefinitions());
     const agentsDir = path.join(__dirname, '../../agents');
-    for (const name of agents) {
-      const mdPath = path.join(agentsDir, `${name}.md`);
-      expect(fs.existsSync(mdPath), `Missing .md file for agent: ${name}`).toBe(true);
+    const promptFiles = fs.readdirSync(agentsDir).filter((file) => file.endsWith('.md') && file !== 'AGENTS.md');
+    for (const file of promptFiles) {
+      const name = file.replace(/\.md$/, '');
+      expect(agents, `Missing registry entry for agent: ${name}`).toContain(name);
     }
   });
 

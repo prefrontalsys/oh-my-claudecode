@@ -85,7 +85,6 @@ describe('Builtin Skills', () => {
         'plan',
         'project-session-manager',
         'ralph',
-        'ralph-init',
         'release',
         'research',
         'security-review',
@@ -144,7 +143,6 @@ describe('Builtin Skills', () => {
       expect(names).toContain('autopilot');
       expect(names).toContain('cancel');
       expect(names).toContain('ralph');
-      expect(names).toContain('ralph-init');
       expect(names).toContain('frontend-ui-ux');
       expect(names).toContain('git-master');
       expect(names).toContain('ultrawork');

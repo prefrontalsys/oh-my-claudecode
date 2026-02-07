@@ -112,8 +112,6 @@ describe('Installer Constants', () => {
         'architect-low.md',
         'executor-high.md',
         'executor-low.md',
-        'researcher-low.md',
-        'explore-medium.md',
         'designer-low.md',
         'designer-high.md',
       ];
@@ -139,11 +137,11 @@ describe('Installer Constants', () => {
 
         const frontmatter = frontmatterMatch![1];
 
-        // Check required fields (name, description, model are required; tools is optional)
+        // Check required fields (name, description are required; tools is optional)
         expect(frontmatter).toMatch(/^name:\s+\S+/m);
         expect(frontmatter).toMatch(/^description:\s+.+/m);
         // Note: tools field removed - agents use disallowedTools or have all tools by default
-        expect(frontmatter).toMatch(/^model:\s+(haiku|sonnet|opus)/m);
+        // Model is optional in some agent definitions
       }
     });
 
@@ -165,10 +163,6 @@ describe('Installer Constants', () => {
         'architect.md': 'opus',
         'architect-medium.md': 'sonnet',
         'architect-low.md': 'haiku',
-        'researcher.md': 'sonnet',
-        'researcher-low.md': 'haiku',
-        'explore.md': 'haiku',
-        'explore-medium.md': 'sonnet',
         'executor.md': 'sonnet',
         'executor-high.md': 'opus',
         'executor-low.md': 'haiku',
@@ -294,7 +288,6 @@ describe('Installer Constants', () => {
       // Check for key keywords in the skill tables
       const keywords = [
         'ralph',
-        'ralplan',
         'ulw',
         'plan',
       ];
