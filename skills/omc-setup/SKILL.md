@@ -712,6 +712,208 @@ If yes, invoke the mcp-setup skill:
 
 If no, skip to next step.
 
+## Step 5.5: Configure Agent Teams (Optional)
+
+**Note**: If resuming and lastCompletedStep >= 5.5, skip to Step 6.
+
+Agent teams are an experimental Claude Code feature that lets you spawn N coordinated agents working on a shared task list with inter-agent messaging. **Teams are disabled by default** and require enabling via `settings.json`.
+
+Reference: https://code.claude.com/docs/en/agent-teams
+
+Use the AskUserQuestion tool to prompt:
+
+**Question:** "Would you like to enable agent teams? Teams let you spawn coordinated agents (e.g., `/team 3:executor 'fix all errors'`). This is an experimental Claude Code feature."
+
+**Options:**
+1. **Yes, enable teams (Recommended)** - Enable the experimental feature and configure defaults
+2. **No, skip** - Leave teams disabled (can enable later)
+
+### If User Chooses YES:
+
+#### Step 5.5.1: Enable Agent Teams in settings.json
+
+**CRITICAL**: Agent teams require `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` to be set in `~/.claude/settings.json`. This must be done carefully to preserve existing user settings.
+
+First, read the current settings.json:
+
+```bash
+SETTINGS_FILE="$HOME/.claude/settings.json"
+
+if [ -f "$SETTINGS_FILE" ]; then
+  echo "Current settings.json found"
+  cat "$SETTINGS_FILE"
+else
+  echo "No settings.json found - will create one"
+fi
+```
+
+Then use the Read tool to read `~/.claude/settings.json` (if it exists). Use the Edit tool to merge the teams configuration while preserving ALL existing settings.
+
+**If settings.json exists and has an `env` key**, merge the new env var into it:
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
+}
+```
+
+Use jq to safely merge without overwriting existing settings:
+
+```bash
+SETTINGS_FILE="$HOME/.claude/settings.json"
+
+if [ -f "$SETTINGS_FILE" ]; then
+  # Merge env var into existing settings, preserving everything else
+  TEMP_FILE=$(mktemp)
+  jq '.env = (.env // {} | . + {"CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"})' "$SETTINGS_FILE" > "$TEMP_FILE" && mv "$TEMP_FILE" "$SETTINGS_FILE"
+  echo "Added CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS to existing settings.json"
+else
+  # Create new settings.json with just the teams env var
+  mkdir -p "$(dirname "$SETTINGS_FILE")"
+  cat > "$SETTINGS_FILE" << 'SETTINGS_EOF'
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
+}
+SETTINGS_EOF
+  echo "Created settings.json with teams enabled"
+fi
+```
+
+**IMPORTANT**: The Edit tool is preferred for modifying settings.json when possible, since it preserves formatting and comments. The jq approach above is the fallback for when the file needs structural merging.
+
+#### Step 5.5.2: Configure Teammate Display Mode
+
+Use the AskUserQuestion tool:
+
+**Question:** "How should teammates be displayed?"
+
+**Options:**
+1. **Auto (Recommended)** - Uses split panes if in tmux, otherwise in-process. Best for most users.
+2. **In-process** - All teammates in your main terminal. Use Shift+Up/Down to select. Works everywhere.
+3. **Split panes (tmux)** - Each teammate in its own pane. Requires tmux or iTerm2.
+
+If user chooses anything other than "Auto", add `teammateMode` to settings.json:
+
+```bash
+SETTINGS_FILE="$HOME/.claude/settings.json"
+
+# TEAMMATE_MODE is "in-process" or "tmux" based on user choice
+# Skip this if user chose "Auto" (that's the default)
+jq --arg mode "TEAMMATE_MODE" '. + {teammateMode: $mode}' "$SETTINGS_FILE" > "${SETTINGS_FILE}.tmp" && mv "${SETTINGS_FILE}.tmp" "$SETTINGS_FILE"
+echo "Teammate display mode set to: TEAMMATE_MODE"
+```
+
+#### Step 5.5.3: Configure Team Defaults in omc-config
+
+Use the AskUserQuestion tool with multiple questions:
+
+**Question 1:** "How many agents should teams spawn by default?"
+
+**Options:**
+1. **3 agents (Recommended)** - Good balance of speed and resource usage
+2. **5 agents (maximum)** - Maximum parallelism for large tasks
+3. **2 agents** - Conservative, for smaller projects
+
+**Question 2:** "Which agent type should teammates use by default?"
+
+**Options:**
+1. **executor (Recommended)** - General-purpose code implementation agent
+2. **build-fixer** - Specialized for build/type error fixing
+3. **designer** - Specialized for UI/frontend work
+
+**Question 3:** "Which model should teammates use by default?"
+
+**Options:**
+1. **sonnet (Recommended)** - Fast, capable, cost-effective for most tasks
+2. **opus** - Maximum capability for complex tasks (higher cost)
+3. **haiku** - Fastest and cheapest, good for simple/repetitive tasks
+
+Store the team configuration in `~/.claude/.omc-config.json`:
+
+```bash
+CONFIG_FILE="$HOME/.claude/.omc-config.json"
+mkdir -p "$(dirname "$CONFIG_FILE")"
+
+if [ -f "$CONFIG_FILE" ]; then
+  EXISTING=$(cat "$CONFIG_FILE")
+else
+  EXISTING='{}'
+fi
+
+# Replace MAX_AGENTS, AGENT_TYPE, MODEL with user choices
+echo "$EXISTING" | jq \
+  --argjson maxAgents MAX_AGENTS \
+  --arg agentType "AGENT_TYPE" \
+  --arg model "MODEL" \
+  '. + {team: {maxAgents: $maxAgents, defaultAgentType: $agentType, defaultModel: $model, monitorIntervalMs: 30000, shutdownTimeoutMs: 15000}}' > "$CONFIG_FILE"
+
+echo "Team configuration saved:"
+echo "  Max agents: MAX_AGENTS"
+echo "  Default agent: AGENT_TYPE"
+echo "  Default model: MODEL"
+```
+
+#### Verify settings.json Integrity
+
+After all modifications, verify settings.json is valid JSON and contains the expected keys:
+
+```bash
+SETTINGS_FILE="$HOME/.claude/settings.json"
+
+# Verify JSON is valid
+if jq empty "$SETTINGS_FILE" 2>/dev/null; then
+  echo "settings.json: valid JSON"
+else
+  echo "ERROR: settings.json is invalid JSON! Restoring from backup..."
+  # The backup from Step 2 should still exist
+  exit 1
+fi
+
+# Verify teams env var is present
+if jq -e '.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS' "$SETTINGS_FILE" > /dev/null 2>&1; then
+  echo "Agent teams: ENABLED"
+else
+  echo "WARNING: Agent teams env var not found in settings.json"
+fi
+
+# Show final settings.json for user review
+echo ""
+echo "Final settings.json:"
+jq '.' "$SETTINGS_FILE"
+```
+
+### If User Chooses NO:
+
+Skip this step. Agent teams will remain disabled. User can enable later by adding to `~/.claude/settings.json`:
+```json
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
+}
+```
+
+Or by running `/oh-my-claudecode:omc-setup --force` and choosing to enable teams.
+
+### Save Progress
+
+```bash
+# Save progress - Step 5.5 complete (Teams configured)
+mkdir -p .omc/state
+CONFIG_TYPE=$(cat ".omc/state/setup-state.json" 2>/dev/null | grep -oE '"configType":\s*"[^"]+"' | cut -d'"' -f4 || echo "unknown")
+cat > ".omc/state/setup-state.json" << EOF
+{
+  "lastCompletedStep": 5.5,
+  "timestamp": "$(date -Iseconds)",
+  "configType": "$CONFIG_TYPE"
+}
+EOF
+```
+
 ## Step 6: Detect Upgrade from 2.x
 
 Check if user has existing configuration:
@@ -747,8 +949,15 @@ Just include these words naturally in your request:
 | ulw | Max parallelism | "ulw refactor the API" |
 | eco | Token-efficient mode | "eco refactor the API" |
 | plan | Planning interview | "plan the new endpoints" |
+| team | Coordinated agents | "/team 3:executor fix errors" |
 
 **ralph includes ultrawork:** When you activate ralph mode, it automatically includes ultrawork's parallel execution. No need to combine keywords.
+
+TEAMS:
+Spawn coordinated agents with shared task lists and real-time messaging:
+- /oh-my-claudecode:team 3:executor "fix all TypeScript errors"
+- /oh-my-claudecode:team 5:build-fixer "fix build errors in src/"
+Teams use Claude Code native tools (TeamCreate/SendMessage/TaskCreate).
 
 MCP SERVERS:
 Run /oh-my-claudecode:mcp-setup to add tools like web search, GitHub, etc.
@@ -788,6 +997,12 @@ MAGIC KEYWORDS (power-user shortcuts):
 | ulw | /ultrawork | "ulw refactor API" |
 | eco | (new!) | "eco fix all errors" |
 | plan | /plan | "plan the endpoints" |
+| team | (new!) | "/team 3:executor fix errors" |
+
+TEAMS (NEW!):
+Spawn coordinated agents with shared task lists and real-time messaging:
+- /oh-my-claudecode:team 3:executor "fix all TypeScript errors"
+- Uses Claude Code native tools (TeamCreate/SendMessage/TaskCreate)
 
 HUD STATUSLINE:
 The status bar now shows OMC state. Restart Claude Code to see it.
@@ -905,6 +1120,7 @@ MODES:
     - Sets up HUD statusline
     - Checks for updates
     - Offers MCP server configuration
+    - Configures team mode defaults (agent count, type, model)
     - If already configured, offers quick update option
 
   Local Configuration (--local)
