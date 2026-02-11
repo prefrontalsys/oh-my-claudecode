@@ -520,20 +520,23 @@ export async function handleAskGemini(args: {
   // Inline prompt support: when `prompt` is provided as a string, auto-persist
   // it to a file for audit trail and continue with normal prompt_file flow.
   // `prompt_file` takes precedence if both are provided.
-  const isInlineMode = !!args.prompt?.trim() && !args.prompt_file?.trim();
+  // Separate intent detection (field presence) from content validation (non-empty).
+  const inlinePrompt = typeof args.prompt === 'string' ? args.prompt : undefined;
+  const hasInlineIntent = inlinePrompt !== undefined && !args.prompt_file?.trim();
+  const isInlineMode = hasInlineIntent && !!inlinePrompt.trim();
+
+  // Reject empty/whitespace inline prompt with explicit error BEFORE any side effects
+  if (hasInlineIntent && !inlinePrompt!.trim()) {
+    return {
+      content: [{ type: 'text' as const, text: 'Inline prompt is empty. Provide a non-empty prompt string.' }],
+      isError: true
+    };
+  }
 
   // Inline mode is foreground only - check BEFORE any file persistence to avoid leaks
   if (isInlineMode && args.background) {
     return {
       content: [{ type: 'text' as const, text: 'Inline prompt mode is foreground only. Use prompt_file for background execution.' }],
-      isError: true
-    };
-  }
-
-  // Validate non-empty inline prompt
-  if (isInlineMode && !args.prompt?.trim()) {
-    return {
-      content: [{ type: 'text' as const, text: 'Inline prompt is empty. Provide a non-empty prompt string.' }],
       isError: true
     };
   }

@@ -82,22 +82,40 @@ describe('Inline prompt integration - Gemini', () => {
 });
 
 describe('Inline prompt validation - empty and background', () => {
-  it('should reject empty/whitespace-only inline prompt for Codex', async () => {
+  it('should reject empty/whitespace-only inline prompt for Codex with explicit message', async () => {
     const result = await handleAskCodex({
       prompt: '   ',
       agent_role: 'architect',
     });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain("Either 'prompt' (inline) or 'prompt_file' (file path) is required");
+    expect(result.content[0].text).toContain('Inline prompt is empty');
   });
 
-  it('should reject empty/whitespace-only inline prompt for Gemini', async () => {
+  it('should reject empty/whitespace-only inline prompt for Gemini with explicit message', async () => {
     const result = await handleAskGemini({
       prompt: '   ',
       agent_role: 'designer',
     });
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('Either prompt (inline string) or prompt_file (path) is required.');
+    expect(result.content[0].text).toContain('Inline prompt is empty');
+  });
+
+  it('should reject empty string inline prompt for Codex', async () => {
+    const result = await handleAskCodex({
+      prompt: '',
+      agent_role: 'architect',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Inline prompt is empty');
+  });
+
+  it('should reject empty string inline prompt for Gemini', async () => {
+    const result = await handleAskGemini({
+      prompt: '',
+      agent_role: 'designer',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('Inline prompt is empty');
   });
 
   it('should block inline prompt with background mode for Codex', async () => {

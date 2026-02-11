@@ -101,28 +101,26 @@ describe('prompt_file-only enforcement', () => {
 
 describe('inline prompt mode', () => {
   describe('handleAskCodex', () => {
-    it('should accept inline prompt and auto-persist to file', async () => {
-      // Inline prompt should be written to .omc/prompts/ and the flow should proceed
-      // It will fail at CLI execution (not mocked for full flow) but should NOT fail
-      // at parameter validation
+    it('should accept inline prompt and pass parameter validation', async () => {
       const result = await handleAskCodex({
         prompt: 'Analyze the architecture of this project',
         agent_role: 'architect',
       });
-      // Should not get a parameter validation error
-      if (result.isError) {
-        expect(result.content[0].text).not.toContain("Either 'prompt' (inline) or 'prompt_file' (file path) is required");
-        expect(result.content[0].text).not.toContain('output_file is required');
-      }
+      // May error at CLI execution, but must NOT error at parameter validation
+      const text = result.content[0].text;
+      expect(text).not.toContain("Either 'prompt' (inline) or 'prompt_file' (file path) is required");
+      expect(text).not.toContain('output_file is required');
+      expect(text).not.toContain('Inline prompt is empty');
+      expect(text).not.toContain('foreground only');
     });
 
-    it('should return error for empty inline prompt', async () => {
+    it('should return error for empty inline prompt with explicit message', async () => {
       const result = await handleAskCodex({
         prompt: '  ',
         agent_role: 'architect',
       });
       expect(result.isError).toBe(true);
-      expect(result.content[0].text).toContain("Either 'prompt' (inline) or 'prompt_file' (file path) is required");
+      expect(result.content[0].text).toContain('Inline prompt is empty');
     });
 
     it('should block inline prompt with background mode', async () => {
@@ -168,16 +166,17 @@ describe('inline prompt mode', () => {
   });
 
   describe('handleAskGemini', () => {
-    it('should accept inline prompt and auto-persist to file', async () => {
+    it('should accept inline prompt and pass parameter validation', async () => {
       const result = await handleAskGemini({
         prompt: 'Review the UI design patterns',
         agent_role: 'designer',
       });
-      // Should not get a parameter validation error
-      if (result.isError) {
-        expect(result.content[0].text).not.toContain('Either prompt (inline string) or prompt_file (path) is required.');
-        expect(result.content[0].text).not.toContain('output_file is required');
-      }
+      // May error at CLI execution, but must NOT error at parameter validation
+      const text = result.content[0].text;
+      expect(text).not.toContain('Either prompt (inline string) or prompt_file (path) is required.');
+      expect(text).not.toContain('output_file is required');
+      expect(text).not.toContain('Inline prompt is empty');
+      expect(text).not.toContain('foreground only');
     });
 
     it('should require output_file when prompt_file is used (backward compat)', async () => {
