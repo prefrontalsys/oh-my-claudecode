@@ -22,8 +22,12 @@ const MAX_COMPLETED_AGENTS = 100;
 const LOCK_TIMEOUT_MS = 5000;
 const LOCK_RETRY_MS = 50;
 const WRITE_DEBOUNCE_MS = 100;
+const MAX_FLUSH_RETRIES = 3;
+const FLUSH_RETRY_BASE_MS = 50;
 // Per-directory debounce state for batching writes (avoids race conditions)
 const pendingWrites = new Map();
+// Guard against duplicate concurrent flushes per directory
+const flushInProgress = new Set();
 /**
  * Check if a process is still alive
  * Signal 0 doesn't kill the process, just checks if it exists
@@ -45,6 +49,59 @@ function syncSleep(ms) {
     const buffer = new SharedArrayBuffer(4);
     const view = new Int32Array(buffer);
     Atomics.wait(view, 0, 0, ms);
+}
+// ============================================================================
+// Merge Logic
+// ============================================================================
+/**
+ * Merge two tracker states with deterministic semantics.
+ * Used by debounced flush to combine disk state with in-memory pending state.
+ *
+ * Merge rules:
+ * - Counters (total_spawned, total_completed, total_failed): Math.max
+ * - Agents: union by agent_id; if same ID exists in both, newer timestamp wins
+ * - last_updated: Math.max of both timestamps
+ */
+export function mergeTrackerStates(diskState, pendingState) {
+    // Build agent map: start with disk agents, overlay with pending
+    const agentMap = new Map();
+    for (const agent of diskState.agents) {
+        agentMap.set(agent.agent_id, agent);
+    }
+    for (const agent of pendingState.agents) {
+        const existing = agentMap.get(agent.agent_id);
+        if (!existing) {
+            // New agent from pending state
+            agentMap.set(agent.agent_id, agent);
+        }
+        else {
+            // Same agent_id in both - pick the one with the newer relevant timestamp
+            const existingTime = existing.completed_at
+                ? new Date(existing.completed_at).getTime()
+                : new Date(existing.started_at).getTime();
+            const pendingTime = agent.completed_at
+                ? new Date(agent.completed_at).getTime()
+                : new Date(agent.started_at).getTime();
+            if (pendingTime >= existingTime) {
+                agentMap.set(agent.agent_id, agent);
+            }
+        }
+    }
+    // Counters: take max to avoid double-counting
+    const total_spawned = Math.max(diskState.total_spawned, pendingState.total_spawned);
+    const total_completed = Math.max(diskState.total_completed, pendingState.total_completed);
+    const total_failed = Math.max(diskState.total_failed, pendingState.total_failed);
+    // Timestamp: take the latest
+    const diskTime = new Date(diskState.last_updated).getTime();
+    const pendingTime = new Date(pendingState.last_updated).getTime();
+    const last_updated = diskTime > pendingTime ? diskState.last_updated : pendingState.last_updated;
+    return {
+        agents: Array.from(agentMap.values()),
+        total_spawned,
+        total_completed,
+        total_failed,
+        last_updated,
+    };
 }
 // ============================================================================
 // State Management
@@ -145,14 +202,10 @@ export function getStateFilePath(directory) {
     return join(stateDir, STATE_FILE);
 }
 /**
- * Read tracking state from file.
- * If there's a pending write for this directory, returns it instead of reading disk.
+ * Read tracking state directly from disk, bypassing the pending writes cache.
+ * Used during flush to get the latest on-disk state for merging.
  */
-export function readTrackingState(directory) {
-    const pending = pendingWrites.get(directory);
-    if (pending) {
-        return pending.state;
-    }
+export function readDiskState(directory) {
     const statePath = getStateFilePath(directory);
     if (!existsSync(statePath)) {
         return {
@@ -168,7 +221,7 @@ export function readTrackingState(directory) {
         return JSON.parse(content);
     }
     catch (error) {
-        console.error("[SubagentTracker] Error reading state:", error);
+        console.error("[SubagentTracker] Error reading disk state:", error);
         return {
             agents: [],
             total_spawned: 0,
@@ -177,6 +230,17 @@ export function readTrackingState(directory) {
             last_updated: new Date().toISOString(),
         };
     }
+}
+/**
+ * Read tracking state from file.
+ * If there's a pending write for this directory, returns it instead of reading disk.
+ */
+export function readTrackingState(directory) {
+    const pending = pendingWrites.get(directory);
+    if (pending) {
+        return pending.state;
+    }
+    return readDiskState(directory);
 }
 /**
  * Write tracking state to file immediately (bypasses debounce).
@@ -192,7 +256,29 @@ function writeTrackingStateImmediate(directory, state) {
     }
 }
 /**
+ * Execute the flush: lock -> re-read disk -> merge -> write -> unlock.
+ * Returns true on success, false if lock could not be acquired.
+ */
+export function executeFlush(directory, pendingState) {
+    if (!acquireLock(directory)) {
+        return false;
+    }
+    try {
+        // Re-read latest disk state to avoid overwriting concurrent changes
+        const diskState = readDiskState(directory);
+        const merged = mergeTrackerStates(diskState, pendingState);
+        writeTrackingStateImmediate(directory, merged);
+        return true;
+    }
+    finally {
+        releaseLock(directory);
+    }
+}
+/**
  * Write tracking state with debouncing to reduce I/O.
+ * The flush callback acquires the lock, re-reads disk state, merges with
+ * the pending in-memory delta, and writes atomically.
+ * If the lock cannot be acquired, retries with exponential backoff (max 3 retries).
  */
 export function writeTrackingState(directory, state) {
     const existing = pendingWrites.get(directory);
@@ -201,21 +287,60 @@ export function writeTrackingState(directory, state) {
     }
     const timeout = setTimeout(() => {
         const pending = pendingWrites.get(directory);
-        if (pending) {
-            writeTrackingStateImmediate(directory, pending.state);
-            pendingWrites.delete(directory);
+        if (!pending)
+            return;
+        pendingWrites.delete(directory);
+        // Guard against duplicate concurrent flushes for the same directory
+        if (flushInProgress.has(directory)) {
+            // Re-queue: put it back and let the next debounce cycle handle it
+            pendingWrites.set(directory, {
+                state: pending.state,
+                timeout: setTimeout(() => {
+                    writeTrackingState(directory, pending.state);
+                }, WRITE_DEBOUNCE_MS),
+            });
+            return;
+        }
+        flushInProgress.add(directory);
+        try {
+            // Try flush with bounded retries on lock failure
+            let success = false;
+            for (let attempt = 0; attempt < MAX_FLUSH_RETRIES; attempt++) {
+                success = executeFlush(directory, pending.state);
+                if (success)
+                    break;
+                // Exponential backoff before retry
+                syncSleep(FLUSH_RETRY_BASE_MS * Math.pow(2, attempt));
+            }
+            if (!success) {
+                console.error(`[SubagentTracker] Failed to flush after ${MAX_FLUSH_RETRIES} retries for ${directory}. Data retained in memory for next attempt.`);
+                // Put data back in pending so the next writeTrackingState call will retry
+                pendingWrites.set(directory, {
+                    state: pending.state,
+                    timeout: setTimeout(() => {
+                        // No-op: data is just stored, will be picked up by next write or flushPendingWrites
+                    }, 0),
+                });
+            }
+        }
+        finally {
+            flushInProgress.delete(directory);
         }
     }, WRITE_DEBOUNCE_MS);
     pendingWrites.set(directory, { state, timeout });
 }
 /**
- * Flush any pending debounced writes immediately.
+ * Flush any pending debounced writes immediately using the merge-aware path.
  * Call this in tests before cleanup to ensure state is persisted.
  */
 export function flushPendingWrites() {
     for (const [directory, pending] of pendingWrites) {
         clearTimeout(pending.timeout);
-        writeTrackingStateImmediate(directory, pending.state);
+        // Use executeFlush for merge-aware writes; fall back to direct write
+        // only if lock acquisition fails (test environments with no contention)
+        if (!executeFlush(directory, pending.state)) {
+            writeTrackingStateImmediate(directory, pending.state);
+        }
     }
     pendingWrites.clear();
 }

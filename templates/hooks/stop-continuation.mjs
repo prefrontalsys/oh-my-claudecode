@@ -8,7 +8,7 @@ async function main() {
   // Consume stdin with timeout protection (required for hook protocol)
   await readStdin();
   // Always allow stop
-  console.log(JSON.stringify({ continue: true }));
+  console.log(JSON.stringify({ continue: true, suppressOutput: true }));
 }
 
 main();

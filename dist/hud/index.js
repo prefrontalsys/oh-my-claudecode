@@ -7,7 +7,7 @@
  */
 import { readStdin, getContextPercent, getModelName } from "./stdin.js";
 import { parseTranscript } from "./transcript.js";
-import { readHudState, readHudConfig, getRunningTasks, initializeHUDState, } from "./state.js";
+import { readHudState, readHudConfig, getRunningTasks, writeHudState, initializeHUDState, } from "./state.js";
 import { readRalphStateForHud, readUltraworkStateForHud, readPrdStateForHud, readAutopilotStateForHud, } from "./omc-state.js";
 import { getUsage } from "./usage-api.js";
 import { render } from "./render.js";
@@ -15,6 +15,11 @@ import { sanitizeOutput } from "./sanitize.js";
 import { extractTokens, createSnapshot, } from "../analytics/token-extractor.js";
 import { extractSessionId } from "../analytics/output-estimator.js";
 import { getTokenTracker } from "../analytics/token-tracker.js";
+import { getRuntimePackageVersion } from "../lib/version.js";
+import { compareVersions } from "../features/auto-update.js";
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
+import { homedir } from "os";
 // Persistent token snapshot for delta calculations
 let previousSnapshot = null;
 /**
@@ -126,7 +131,7 @@ async function getTokenTrackerFallback(sessionId, durationMs) {
  * Calculate session health from session start time and LIVE stdin data.
  * Uses stdin's current_usage for real-time token display.
  */
-async function calculateSessionHealth(sessionStart, contextPercent, stdin) {
+async function calculateSessionHealth(sessionStart, contextPercent, stdin, thresholds) {
     // Calculate duration (use 0 if no session start)
     const durationMs = sessionStart ? Date.now() - sessionStart.getTime() : 0;
     const durationMinutes = Math.floor(durationMs / 60_000);
@@ -178,10 +183,12 @@ async function calculateSessionHealth(sessionStart, contextPercent, stdin) {
         const hours = durationMs / (1000 * 60 * 60);
         costPerHour = hours > 0 ? sessionCost / hours : 0;
         // Adjust health based on cost (Budget warnings)
-        if (sessionCost > 5.0) {
+        const budgetCritical = thresholds?.budgetCritical ?? 5.0;
+        const budgetWarning = thresholds?.budgetWarning ?? 2.0;
+        if (sessionCost > budgetCritical) {
             health = "critical";
         }
-        else if (sessionCost > 2.0 && health !== "critical") {
+        else if (sessionCost > budgetWarning && health !== "critical") {
             health = "warning";
         }
     }
@@ -250,8 +257,55 @@ async function main() {
         // Read HUD state for background tasks
         const hudState = readHudState(cwd);
         const backgroundTasks = hudState?.backgroundTasks || [];
+        // Persist session start time to survive tail-parsing resets (#528)
+        // When tail parsing kicks in for large transcripts, sessionStart comes from
+        // the first entry in the tail chunk rather than the actual session start.
+        // We persist the real start time in HUD state on first observation.
+        // Scoped per session ID so a new session in the same cwd resets the timestamp.
+        let sessionStart = transcriptData.sessionStart;
+        const currentSessionId = extractSessionId(stdin.transcript_path);
+        const sameSession = hudState?.sessionId === currentSessionId;
+        if (sameSession && hudState?.sessionStartTimestamp) {
+            // Use persisted value (the real session start) - but validate first
+            const persisted = new Date(hudState.sessionStartTimestamp);
+            if (!isNaN(persisted.getTime())) {
+                sessionStart = persisted;
+            }
+            // If invalid, fall through to transcript-derived sessionStart
+        }
+        else if (sessionStart) {
+            // First time seeing session start (or new session) - persist it
+            const stateToWrite = hudState || { timestamp: new Date().toISOString(), backgroundTasks: [] };
+            stateToWrite.sessionStartTimestamp = sessionStart.toISOString();
+            stateToWrite.sessionId = currentSessionId;
+            stateToWrite.timestamp = new Date().toISOString();
+            writeHudState(stateToWrite, cwd);
+        }
         // Fetch rate limits from OAuth API (if available)
         const rateLimits = config.elements.rateLimits !== false ? await getUsage() : null;
+        // Read OMC version and update check cache
+        let omcVersion = null;
+        let updateAvailable = null;
+        try {
+            omcVersion = getRuntimePackageVersion();
+            if (omcVersion === 'unknown')
+                omcVersion = null;
+        }
+        catch {
+            // Ignore version detection errors
+        }
+        try {
+            const updateCacheFile = join(homedir(), '.omc', 'update-check.json');
+            if (existsSync(updateCacheFile)) {
+                const cached = JSON.parse(readFileSync(updateCacheFile, 'utf-8'));
+                if (cached?.latestVersion && omcVersion && compareVersions(omcVersion, cached.latestVersion) < 0) {
+                    updateAvailable = cached.latestVersion;
+                }
+            }
+        }
+        catch {
+            // Ignore update cache read errors
+        }
         // Build render context
         const context = {
             contextPercent: getContextPercent(stdin),
@@ -268,7 +322,9 @@ async function main() {
             rateLimits,
             pendingPermission: transcriptData.pendingPermission || null,
             thinkingState: transcriptData.thinkingState || null,
-            sessionHealth: await calculateSessionHealth(transcriptData.sessionStart, getContextPercent(stdin), stdin),
+            sessionHealth: await calculateSessionHealth(sessionStart, getContextPercent(stdin), stdin, config.thresholds),
+            omcVersion,
+            updateAvailable,
         };
         // Debug: log data if OMC_DEBUG is set
         if (process.env.OMC_DEBUG) {

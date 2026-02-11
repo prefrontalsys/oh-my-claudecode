@@ -41,6 +41,14 @@ export declare class SessionManager {
     }): Promise<SessionMetadata[]>;
     private saveCurrentSession;
     private loadHistory;
+    /**
+     * Migrate session history from local (.omc/state/) to global (~/.omc/state/).
+     * Runs once on first loadHistory() call. Handles three cases:
+     * - Local exists, global doesn't: copy local to global
+     * - Both exist: merge, dedup by session ID
+     * - Only global or neither: no-op
+     */
+    private migrateLocalToGlobal;
     private addToHistory;
     private generateSessionId;
 }

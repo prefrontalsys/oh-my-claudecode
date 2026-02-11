@@ -135,18 +135,6 @@ const cleaned = cleanupOrphanedState('/path/to/project');
 // => 1
 ```
 
-#### `vacuumSwarmDb(directory: string): boolean`
-Runs VACUUM on swarm SQLite database if it exists.
-
-**Returns:** `true` if successful, `false` if database doesn't exist or vacuum failed.
-
-**Requirements:** `sqlite3` must be installed and available in PATH.
-
-```typescript
-const vacuumed = vacuumSwarmDb('/path/to/project');
-// => true
-```
-
 ### Main Entry Points
 
 #### `processSetupInit(input: SetupInput): Promise<HookOutput>`

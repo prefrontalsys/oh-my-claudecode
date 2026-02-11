@@ -8,7 +8,6 @@
  */
 import { existsSync, mkdirSync, readdirSync, statSync, unlinkSync, readFileSync, appendFileSync } from 'fs';
 import { join } from 'path';
-import { execSync, execFileSync } from 'child_process';
 import { registerBeadsContext } from '../beads-context/index.js';
 // ============================================================================
 // Constants
@@ -214,29 +213,6 @@ export function cleanupOrphanedState(directory) {
     return cleanedCount;
 }
 /**
- * Run VACUUM on swarm SQLite database if it exists
- */
-export function vacuumSwarmDb(directory) {
-    const swarmDbPath = join(directory, '.omc/state/swarm.db');
-    if (!existsSync(swarmDbPath)) {
-        return false; // Database doesn't exist
-    }
-    try {
-        // Check if sqlite3 is available
-        execSync('which sqlite3', { stdio: 'pipe' });
-        // Run VACUUM using execFileSync to prevent command injection
-        execFileSync('sqlite3', [swarmDbPath, 'VACUUM;'], {
-            stdio: 'pipe',
-            timeout: 5000, // 5 second timeout
-        });
-        return true;
-    }
-    catch {
-        // sqlite3 not available or vacuum failed
-        return false;
-    }
-}
-/**
  * Process setup maintenance trigger
  */
 export async function processSetupMaintenance(input) {
@@ -248,14 +224,11 @@ export async function processSetupMaintenance(input) {
     };
     let prunedFiles = 0;
     let orphanedCleaned = 0;
-    let dbVacuumed = false;
     try {
         // Prune old state files
         prunedFiles = pruneOldStateFiles(input.cwd, DEFAULT_STATE_MAX_AGE_DAYS);
         // Cleanup orphaned state
         orphanedCleaned = cleanupOrphanedState(input.cwd);
-        // Vacuum swarm database
-        dbVacuumed = vacuumSwarmDb(input.cwd);
     }
     catch (err) {
         result.errors.push(err instanceof Error ? err.message : String(err));
@@ -264,9 +237,8 @@ export async function processSetupMaintenance(input) {
         `OMC maintenance completed:`,
         prunedFiles > 0 ? `- ${prunedFiles} old state files pruned` : null,
         orphanedCleaned > 0 ? `- ${orphanedCleaned} orphaned state files cleaned` : null,
-        dbVacuumed ? `- Swarm database vacuumed` : null,
         result.errors.length > 0 ? `- Errors: ${result.errors.length}` : null,
-        prunedFiles === 0 && orphanedCleaned === 0 && !dbVacuumed && result.errors.length === 0
+        prunedFiles === 0 && orphanedCleaned === 0 && result.errors.length === 0
             ? '- No maintenance needed'
             : null,
     ]

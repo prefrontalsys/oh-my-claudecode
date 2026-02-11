@@ -7,7 +7,7 @@
 // Types
 export * from './types.js';
 // Utilities
-export { createAgentToolRestrictions, mergeAgentConfig, buildDelegationTable, buildUseAvoidSection, createEnvContext, getAvailableAgents, buildKeyTriggersSection, validateAgentConfig, deepMerge, loadAgentPrompt } from './utils.js';
+export { createAgentToolRestrictions, mergeAgentConfig, buildDelegationTable, buildUseAvoidSection, createEnvContext, getAvailableAgents, buildKeyTriggersSection, validateAgentConfig, deepMerge, loadAgentPrompt, formatOpenQuestions, OPEN_QUESTIONS_PATH } from './utils.js';
 // Individual agent exports
 export { architectAgent, ARCHITECT_PROMPT_METADATA } from './architect.js';
 export { exploreAgent, EXPLORE_PROMPT_METADATA } from './explore.js';
@@ -34,29 +34,6 @@ export { dependencyExpertAgent, testEngineerAgent, qualityStrategistAgent } from
 export { productManagerAgent, uxResearcherAgent, informationArchitectAgent, productAnalystAgent } from './definitions.js';
 // Specialized agents (Security, Build, Code Review, Git)
 export { securityReviewerAgent, buildFixerAgent, codeReviewerAgent, gitMasterAgent } from './definitions.js';
-// Backward compatibility: Deprecated tiered agent aliases
-/** @deprecated Use agent with model parameter instead */
-export const architectMediumAgent = undefined;
-/** @deprecated Use agent with model parameter instead */
-export const architectLowAgent = undefined;
-/** @deprecated Use agent with model parameter instead */
-export const executorHighAgent = undefined;
-/** @deprecated Use agent with model parameter instead */
-export const executorLowAgent = undefined;
-/** @deprecated Use agent with model parameter instead */
-export const exploreHighAgent = undefined;
-/** @deprecated Use agent with model parameter instead */
-export const designerLowAgent = undefined;
-/** @deprecated Use agent with model parameter instead */
-export const designerHighAgent = undefined;
-/** @deprecated Use agent with model parameter instead */
-export const scientistHighAgent = undefined;
-/** @deprecated Use security-reviewer agent instead */
-export const securityReviewerLowAgent = undefined;
-/** @deprecated Use test-engineer agent instead */
-export const tddGuideAgent = undefined;
-/** @deprecated Use test-engineer agent instead */
-export const tddGuideLowAgent = undefined;
 // Core exports (getAgentDefinitions and omcSystemPrompt)
 export { getAgentDefinitions, omcSystemPrompt } from './definitions.js';
 // Deprecated exports (for backward compatibility)

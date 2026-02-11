@@ -223,6 +223,35 @@ function readStateFile(stateDir, globalStateDir, filename) {
   return { state: null, path: localPath, isGlobal: false }; // Default to local for new writes
 }
 
+const SESSION_ID_ALLOWLIST = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,255}$/;
+
+function sanitizeSessionId(sessionId) {
+  if (!sessionId || typeof sessionId !== "string") return "";
+  return SESSION_ID_ALLOWLIST.test(sessionId) ? sessionId : "";
+}
+
+function isValidSessionId(sessionId) {
+  return typeof sessionId === "string" && SESSION_ID_ALLOWLIST.test(sessionId);
+}
+
+/**
+ * Read state file with session-scoped path support.
+ * If sessionId is provided, ONLY reads the session-scoped path.
+ * Falls back to legacy local/global paths when sessionId is not provided.
+ */
+
+function readStateFileWithSession(stateDir, globalStateDir, filename, sessionId) {
+  const safeSessionId = sanitizeSessionId(sessionId);
+  if (safeSessionId) {
+    const sessionsDir = join(stateDir, "sessions", safeSessionId);
+    const sessionPath = join(sessionsDir, filename);
+    const state = readJsonFile(sessionPath);
+    return { state, path: sessionPath, isGlobal: false };
+  }
+
+  return readStateFile(stateDir, globalStateDir, filename);
+}
+
 /**
  * Count incomplete Tasks from Claude Code's native Task system.
  */
@@ -376,12 +405,14 @@ async function main() {
       data = JSON.parse(input);
     } catch {
       // Invalid JSON - allow stop to prevent hanging
-      process.stdout.write(JSON.stringify({ continue: true }) + "\n");
+      process.stdout.write(JSON.stringify({ continue: true, suppressOutput: true }) + "\n");
       return;
     }
 
     const directory = data.cwd || data.directory || process.cwd();
-    const sessionId = data.sessionId || data.session_id || data.sessionid || "";
+    const sessionIdRaw = data.sessionId || data.session_id || data.sessionid || "";
+    const sessionId = sanitizeSessionId(sessionIdRaw);
+    const hasValidSessionId = isValidSessionId(sessionIdRaw);
     const stateDir = join(directory, ".omc", "state");
     const globalStateDir = join(homedir(), ".omc", "state");
 
@@ -389,47 +420,58 @@ async function main() {
     // Blocking these causes a deadlock where Claude Code cannot compact.
     // See: https://github.com/Yeachan-Heo/oh-my-claudecode/issues/213
     if (isContextLimitStop(data)) {
-      console.log(JSON.stringify({ continue: true }));
+      console.log(JSON.stringify({ continue: true, suppressOutput: true }));
       return;
     }
 
     // Respect user abort (Ctrl+C, cancel)
     if (isUserAbort(data)) {
-      console.log(JSON.stringify({ continue: true }));
+      console.log(JSON.stringify({ continue: true, suppressOutput: true }));
       return;
     }
 
-    // Read all mode states (local-first with fallback to global)
-    const ralph = readStateFile(stateDir, globalStateDir, "ralph-state.json");
-    const autopilot = readStateFile(
+    // Read all mode states (session-scoped when sessionId provided)
+    const ralph = readStateFileWithSession(
+      stateDir,
+      globalStateDir,
+      "ralph-state.json",
+      sessionId,
+    );
+    const autopilot = readStateFileWithSession(
       stateDir,
       globalStateDir,
       "autopilot-state.json",
+      sessionId,
     );
-    const ultrapilot = readStateFile(
+    const ultrapilot = readStateFileWithSession(
       stateDir,
       globalStateDir,
       "ultrapilot-state.json",
+      sessionId,
     );
-    const ultrawork = readStateFile(
+    const ultrawork = readStateFileWithSession(
       stateDir,
       globalStateDir,
       "ultrawork-state.json",
+      sessionId,
     );
-    const ecomode = readStateFile(
+    const ecomode = readStateFileWithSession(
       stateDir,
       globalStateDir,
       "ecomode-state.json",
+      sessionId,
     );
-    const ultraqa = readStateFile(
+    const ultraqa = readStateFileWithSession(
       stateDir,
       globalStateDir,
       "ultraqa-state.json",
+      sessionId,
     );
-    const pipeline = readStateFile(
+    const pipeline = readStateFileWithSession(
       stateDir,
       globalStateDir,
       "pipeline-state.json",
+      sessionId,
     );
 
     // Swarm uses swarm-summary.json (not swarm-state.json) + marker file
@@ -448,50 +490,22 @@ async function main() {
       !isStaleState(ralph.state) &&
       isStateForCurrentProject(ralph.state, directory, ralph.isGlobal)
     ) {
-      const iteration = ralph.state.iteration || 1;
-      const maxIter = ralph.state.max_iterations || 100;
+      const sessionMatches = hasValidSessionId
+        ? ralph.state.session_id === sessionId
+        : !ralph.state.session_id || ralph.state.session_id === sessionId;
+      if (sessionMatches) {
+        const iteration = ralph.state.iteration || 1;
+        const maxIter = ralph.state.max_iterations || 100;
 
-      if (iteration < maxIter) {
-        const toolError = readLastToolError(stateDir);
-        const errorGuidance = getToolErrorRetryGuidance(toolError);
-
-        ralph.state.iteration = iteration + 1;
-        ralph.state.last_checked_at = new Date().toISOString();
-        writeJsonFile(ralph.path, ralph.state);
-
-        let reason = `[RALPH LOOP - ITERATION ${iteration + 1}/${maxIter}] Work is NOT done. Continue working.\nWhen FULLY complete (after Architect verification), run /oh-my-claudecode:cancel to cleanly exit ralph mode and clean up all state files. If cancel fails, retry with /oh-my-claudecode:cancel --force.\n${ralph.state.prompt ? `Task: ${ralph.state.prompt}` : ""}`;
-        if (errorGuidance) {
-          reason = errorGuidance + reason;
-        }
-
-        console.log(
-          JSON.stringify({
-            decision: "block",
-            reason,
-          }),
-        );
-        return;
-      }
-    }
-
-    // Priority 2: Autopilot (high-level orchestration)
-    if (
-      autopilot.state?.active &&
-      !isStaleState(autopilot.state) &&
-      isStateForCurrentProject(autopilot.state, directory, autopilot.isGlobal)
-    ) {
-      const phase = autopilot.state.phase || "unknown";
-      if (phase !== "complete") {
-        const newCount = (autopilot.state.reinforcement_count || 0) + 1;
-        if (newCount <= 20) {
+        if (iteration < maxIter) {
           const toolError = readLastToolError(stateDir);
           const errorGuidance = getToolErrorRetryGuidance(toolError);
 
-          autopilot.state.reinforcement_count = newCount;
-          autopilot.state.last_checked_at = new Date().toISOString();
-          writeJsonFile(autopilot.path, autopilot.state);
+          ralph.state.iteration = iteration + 1;
+          ralph.state.last_checked_at = new Date().toISOString();
+          writeJsonFile(ralph.path, ralph.state);
 
-          let reason = `[AUTOPILOT - Phase: ${phase}] Autopilot not complete. Continue working. When all phases are complete, run /oh-my-claudecode:cancel to cleanly exit and clean up state files. If cancel fails, retry with /oh-my-claudecode:cancel --force.`;
+          let reason = `[RALPH LOOP - ITERATION ${iteration + 1}/${maxIter}] Work is NOT done. Continue working.\nWhen FULLY complete (after Architect verification), run /oh-my-claudecode:cancel to cleanly exit ralph mode and clean up all state files. If cancel fails, retry with /oh-my-claudecode:cancel --force.\n${ralph.state.prompt ? `Task: ${ralph.state.prompt}` : ""}`;
           if (errorGuidance) {
             reason = errorGuidance + reason;
           }
@@ -507,10 +521,51 @@ async function main() {
       }
     }
 
+    // Priority 2: Autopilot (high-level orchestration)
+    if (
+      autopilot.state?.active &&
+      !isStaleState(autopilot.state) &&
+      isStateForCurrentProject(autopilot.state, directory, autopilot.isGlobal)
+    ) {
+      const sessionMatches = hasValidSessionId
+        ? autopilot.state.session_id === sessionId
+        : !autopilot.state.session_id || autopilot.state.session_id === sessionId;
+      if (sessionMatches) {
+        const phase = autopilot.state.phase || "unspecified";
+        if (phase !== "complete") {
+          const newCount = (autopilot.state.reinforcement_count || 0) + 1;
+          if (newCount <= 20) {
+            const toolError = readLastToolError(stateDir);
+            const errorGuidance = getToolErrorRetryGuidance(toolError);
+
+            autopilot.state.reinforcement_count = newCount;
+            autopilot.state.last_checked_at = new Date().toISOString();
+            writeJsonFile(autopilot.path, autopilot.state);
+
+            let reason = `[AUTOPILOT - Phase: ${phase}] Autopilot not complete. Continue working. When all phases are complete, run /oh-my-claudecode:cancel to cleanly exit and clean up state files. If cancel fails, retry with /oh-my-claudecode:cancel --force.`;
+            if (errorGuidance) {
+              reason = errorGuidance + reason;
+            }
+
+            console.log(
+              JSON.stringify({
+                decision: "block",
+                reason,
+              }),
+            );
+            return;
+          }
+        }
+      }
+    }
+
     // Priority 3: Ultrapilot (parallel autopilot)
     if (
       ultrapilot.state?.active &&
       !isStaleState(ultrapilot.state) &&
+      (hasValidSessionId
+        ? ultrapilot.state.session_id === sessionId
+        : !ultrapilot.state.session_id || ultrapilot.state.session_id === sessionId) &&
       isStateForCurrentProject(ultrapilot.state, directory, ultrapilot.isGlobal)
     ) {
       const workers = ultrapilot.state.workers || [];
@@ -583,6 +638,9 @@ async function main() {
     if (
       pipeline.state?.active &&
       !isStaleState(pipeline.state) &&
+      (hasValidSessionId
+        ? pipeline.state.session_id === sessionId
+        : !pipeline.state.session_id || pipeline.state.session_id === sessionId) &&
       isStateForCurrentProject(pipeline.state, directory, pipeline.isGlobal)
     ) {
       const currentStage = pipeline.state.current_stage || 0;
@@ -617,6 +675,9 @@ async function main() {
     if (
       ultraqa.state?.active &&
       !isStaleState(ultraqa.state) &&
+      (hasValidSessionId
+        ? ultraqa.state.session_id === sessionId
+        : !ultraqa.state.session_id || ultraqa.state.session_id === sessionId) &&
       isStateForCurrentProject(ultraqa.state, directory, ultraqa.isGlobal)
     ) {
       const cycle = ultraqa.state.cycle || 1;
@@ -651,8 +712,9 @@ async function main() {
     if (
       ultrawork.state?.active &&
       !isStaleState(ultrawork.state) &&
-      (!ultrawork.state.session_id ||
-        ultrawork.state.session_id === sessionId) &&
+      (hasValidSessionId
+        ? ultrawork.state.session_id === sessionId
+        : !ultrawork.state.session_id || ultrawork.state.session_id === sessionId) &&
       isStateForCurrentProject(ultrawork.state, directory, ultrawork.isGlobal)
     ) {
       const newCount = (ultrawork.state.reinforcement_count || 0) + 1;
@@ -660,7 +722,7 @@ async function main() {
 
       if (newCount > maxReinforcements) {
         // Max reinforcements reached - allow stop
-        console.log(JSON.stringify({ continue: true }));
+        console.log(JSON.stringify({ continue: true, suppressOutput: true }));
         return;
       }
 
@@ -700,6 +762,9 @@ async function main() {
     if (
       ecomode.state?.active &&
       !isStaleState(ecomode.state) &&
+      (hasValidSessionId
+        ? ecomode.state.session_id === sessionId
+        : !ecomode.state.session_id || ecomode.state.session_id === sessionId) &&
       isStateForCurrentProject(ecomode.state, directory, ecomode.isGlobal)
     ) {
       const newCount = (ecomode.state.reinforcement_count || 0) + 1;
@@ -707,7 +772,7 @@ async function main() {
 
       if (newCount > maxReinforcements) {
         // Max reinforcements reached - allow stop
-        console.log(JSON.stringify({ continue: true }));
+        console.log(JSON.stringify({ continue: true, suppressOutput: true }));
         return;
       }
 
@@ -740,7 +805,7 @@ async function main() {
     }
 
     // No blocking needed
-    console.log(JSON.stringify({ continue: true }));
+    console.log(JSON.stringify({ continue: true, suppressOutput: true }));
   } catch (error) {
     // On any error, allow stop rather than blocking forever
     // CRITICAL: Use process.stdout.write instead of console.log to avoid
@@ -754,7 +819,7 @@ async function main() {
       // Ignore stderr errors - we just need to return valid JSON
     }
     try {
-      process.stdout.write(JSON.stringify({ continue: true }) + "\n");
+      process.stdout.write(JSON.stringify({ continue: true, suppressOutput: true }) + "\n");
     } catch {
       // If stdout write fails, the hook will timeout and Claude Code will proceed
       // This is better than hanging forever
@@ -773,7 +838,7 @@ process.on("uncaughtException", (error) => {
     // Ignore
   }
   try {
-    process.stdout.write(JSON.stringify({ continue: true }) + "\n");
+    process.stdout.write(JSON.stringify({ continue: true, suppressOutput: true }) + "\n");
   } catch {
     // If we can't write, just exit
   }
@@ -789,7 +854,7 @@ process.on("unhandledRejection", (error) => {
     // Ignore
   }
   try {
-    process.stdout.write(JSON.stringify({ continue: true }) + "\n");
+    process.stdout.write(JSON.stringify({ continue: true, suppressOutput: true }) + "\n");
   } catch {
     // If we can't write, just exit
   }
@@ -807,7 +872,7 @@ const safetyTimeout = setTimeout(() => {
     // Ignore
   }
   try {
-    process.stdout.write(JSON.stringify({ continue: true }) + "\n");
+    process.stdout.write(JSON.stringify({ continue: true, suppressOutput: true }) + "\n");
   } catch {
     // If we can't write, just exit
   }

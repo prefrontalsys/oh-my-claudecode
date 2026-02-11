@@ -13,16 +13,21 @@ import { stateTools } from "../tools/state-tools.js";
 import { notepadTools } from "../tools/notepad-tools.js";
 import { memoryTools } from "../tools/memory-tools.js";
 import { traceTools } from "../tools/trace-tools.js";
-// Aggregate all custom tools
+import { TOOL_CATEGORIES } from "../constants/index.js";
+// Tag each tool array with its category before aggregation
+function tagCategory(tools, category) {
+    return tools.map(t => ({ ...t, category }));
+}
+// Aggregate all custom tools with category metadata
 const allTools = [
-    ...lspTools,
-    ...astTools,
-    pythonReplTool,
-    ...skillsTools,
-    ...stateTools,
-    ...notepadTools,
-    ...memoryTools,
-    ...traceTools
+    ...tagCategory(lspTools, TOOL_CATEGORIES.LSP),
+    ...tagCategory(astTools, TOOL_CATEGORIES.AST),
+    { ...pythonReplTool, category: TOOL_CATEGORIES.PYTHON },
+    ...tagCategory(skillsTools, TOOL_CATEGORIES.SKILLS),
+    ...tagCategory(stateTools, TOOL_CATEGORIES.STATE),
+    ...tagCategory(notepadTools, TOOL_CATEGORIES.NOTEPAD),
+    ...tagCategory(memoryTools, TOOL_CATEGORIES.MEMORY),
+    ...tagCategory(traceTools, TOOL_CATEGORIES.TRACE),
 ];
 // Convert to SDK tool format
 // The SDK's tool() expects a ZodRawShape directly (not wrapped in z.object())
@@ -41,29 +46,36 @@ export const omcToolsServer = createSdkMcpServer({
  * Tool names in MCP format for allowedTools configuration
  */
 export const omcToolNames = allTools.map(t => `mcp__t__${t.name}`);
+// Build a map from MCP tool name to category for efficient lookup
+const toolCategoryMap = new Map(allTools.map(t => [`mcp__t__${t.name}`, t.category]));
 /**
- * Get tool names filtered by category
+ * Get tool names filtered by category.
+ * Uses category metadata instead of string heuristics.
  */
 export function getOmcToolNames(options) {
     const { includeLsp = true, includeAst = true, includePython = true, includeSkills = true, includeState = true, includeNotepad = true, includeMemory = true, includeTrace = true } = options || {};
+    const excludedCategories = new Set();
+    if (!includeLsp)
+        excludedCategories.add(TOOL_CATEGORIES.LSP);
+    if (!includeAst)
+        excludedCategories.add(TOOL_CATEGORIES.AST);
+    if (!includePython)
+        excludedCategories.add(TOOL_CATEGORIES.PYTHON);
+    if (!includeSkills)
+        excludedCategories.add(TOOL_CATEGORIES.SKILLS);
+    if (!includeState)
+        excludedCategories.add(TOOL_CATEGORIES.STATE);
+    if (!includeNotepad)
+        excludedCategories.add(TOOL_CATEGORIES.NOTEPAD);
+    if (!includeMemory)
+        excludedCategories.add(TOOL_CATEGORIES.MEMORY);
+    if (!includeTrace)
+        excludedCategories.add(TOOL_CATEGORIES.TRACE);
+    if (excludedCategories.size === 0)
+        return [...omcToolNames];
     return omcToolNames.filter(name => {
-        if (!includeLsp && name.includes('lsp_'))
-            return false;
-        if (!includeAst && name.includes('ast_'))
-            return false;
-        if (!includePython && name.includes('python_repl'))
-            return false;
-        if (!includeSkills && (name.includes('load_omc_skills') || name.includes('list_omc_skills')))
-            return false;
-        if (!includeState && name.includes('state_'))
-            return false;
-        if (!includeNotepad && name.includes('notepad_'))
-            return false;
-        if (!includeMemory && name.includes('memory_'))
-            return false;
-        if (!includeTrace && name.includes('trace_'))
-            return false;
-        return true;
+        const category = toolCategoryMap.get(name);
+        return !category || !excludedCategories.has(category);
     });
 }
 //# sourceMappingURL=omc-tools-server.js.map

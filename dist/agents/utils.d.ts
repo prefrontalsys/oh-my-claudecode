@@ -9,7 +9,8 @@
 import type { AgentConfig, AgentPromptMetadata, AvailableAgent, AgentOverrideConfig } from './types.js';
 /**
  * Load an agent prompt from /agents/{agentName}.md
- * Strips YAML frontmatter and returns the content
+ * Uses build-time embedded prompts when available (CJS bundles),
+ * falls back to runtime file reads (dev/test environments).
  *
  * Security: Validates agent name to prevent path traversal attacks
  */
@@ -53,6 +54,21 @@ export declare function validateAgentConfig(config: AgentConfig): string[];
  * Parse disallowedTools from agent markdown frontmatter
  */
 export declare function parseDisallowedTools(agentName: string): string[] | undefined;
+/**
+ * Standard path for open questions file
+ */
+export declare const OPEN_QUESTIONS_PATH = ".omc/plans/open-questions.md";
+/**
+ * Format open questions for appending to the standard open-questions.md file.
+ *
+ * @param topic - The plan or analysis topic name
+ * @param questions - Array of { question, reason } objects
+ * @returns Formatted markdown string ready to append
+ */
+export declare function formatOpenQuestions(topic: string, questions: Array<{
+    question: string;
+    reason: string;
+}>): string;
 /**
  * Deep merge utility for configurations
  */

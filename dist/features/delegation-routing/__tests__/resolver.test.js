@@ -88,7 +88,7 @@ describe('resolveDelegation', () => {
         });
         expect(result.provider).toBe('gemini');
         expect(result.tool).toBe('ask_gemini');
-        expect(result.agentOrModel).toBe('gemini-2.5-pro');
+        expect(result.agentOrModel).toBe('gemini-3-pro-preview');
     });
     // Test 9: Explicit ask_gemini with custom model
     it('should resolve ask_gemini explicit tool with custom model', () => {
@@ -181,7 +181,7 @@ describe('resolveDelegation', () => {
         });
         expect(result.provider).toBe('gemini');
         expect(result.tool).toBe('ask_gemini');
-        expect(result.agentOrModel).toBe('gemini-2.5-pro');
+        expect(result.agentOrModel).toBe('gemini-3-pro-preview');
     });
     // Test 15: Config enabled but role not in roles map
     it('should fallback to defaults when role not in config roles', () => {
@@ -297,7 +297,7 @@ describe('resolveDelegation', () => {
         });
         expect(result.provider).toBe('gemini');
         expect(result.tool).toBe('ask_gemini');
-        expect(result.agentOrModel).toBe('gemini-2.5-pro');
+        expect(result.agentOrModel).toBe('gemini-3-pro-preview');
         expect(result.reason).toContain('Fallback to default provider: gemini');
         expect(result.fallbackChain).toBeUndefined();
     });

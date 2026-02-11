@@ -99,20 +99,43 @@ export interface AgentIntervention {
 export declare const COST_LIMIT_USD = 1;
 export declare const DEADLOCK_CHECK_THRESHOLD = 3;
 /**
+ * Merge two tracker states with deterministic semantics.
+ * Used by debounced flush to combine disk state with in-memory pending state.
+ *
+ * Merge rules:
+ * - Counters (total_spawned, total_completed, total_failed): Math.max
+ * - Agents: union by agent_id; if same ID exists in both, newer timestamp wins
+ * - last_updated: Math.max of both timestamps
+ */
+export declare function mergeTrackerStates(diskState: SubagentTrackingState, pendingState: SubagentTrackingState): SubagentTrackingState;
+/**
  * Get the state file path
  */
 export declare function getStateFilePath(directory: string): string;
+/**
+ * Read tracking state directly from disk, bypassing the pending writes cache.
+ * Used during flush to get the latest on-disk state for merging.
+ */
+export declare function readDiskState(directory: string): SubagentTrackingState;
 /**
  * Read tracking state from file.
  * If there's a pending write for this directory, returns it instead of reading disk.
  */
 export declare function readTrackingState(directory: string): SubagentTrackingState;
 /**
+ * Execute the flush: lock -> re-read disk -> merge -> write -> unlock.
+ * Returns true on success, false if lock could not be acquired.
+ */
+export declare function executeFlush(directory: string, pendingState: SubagentTrackingState): boolean;
+/**
  * Write tracking state with debouncing to reduce I/O.
+ * The flush callback acquires the lock, re-reads disk state, merges with
+ * the pending in-memory delta, and writes atomically.
+ * If the lock cannot be acquired, retries with exponential backoff (max 3 retries).
  */
 export declare function writeTrackingState(directory: string, state: SubagentTrackingState): void;
 /**
- * Flush any pending debounced writes immediately.
+ * Flush any pending debounced writes immediately using the merge-aware path.
  * Call this in tests before cleanup to ensure state is persisted.
  */
 export declare function flushPendingWrites(): void;

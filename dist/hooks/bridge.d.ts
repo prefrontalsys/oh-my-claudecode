@@ -13,6 +13,11 @@
  * ```
  */
 /**
+ * Returns the required camelCase keys for a given hook type.
+ * Centralizes key requirements to avoid drift between normalization and validation.
+ */
+export declare function requiredKeysForHook(hookType: string): string[];
+/**
  * Input format from Claude Code hooks (via stdin)
  */
 export interface HookInput {
@@ -63,7 +68,7 @@ export declare function resetSkipHooksCache(): void;
  * Main hook processor
  * Routes to specific hook handler based on type
  */
-export declare function processHook(hookType: HookType, input: HookInput): Promise<HookOutput>;
+export declare function processHook(hookType: HookType, rawInput: HookInput): Promise<HookOutput>;
 /**
  * CLI entry point for shell script invocation
  * Reads JSON from stdin, processes hook, writes JSON to stdout

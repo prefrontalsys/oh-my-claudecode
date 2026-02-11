@@ -5,14 +5,14 @@
 
 import { existsSync, readFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Dynamic imports for shared modules
-const { readStdin } = await import(join(__dirname, 'lib', 'stdin.mjs'));
-const { atomicWriteFileSync } = await import(join(__dirname, 'lib', 'atomic-write.mjs'));
+// Dynamic imports for shared modules (use pathToFileURL for Windows compatibility, #524)
+const { readStdin } = await import(pathToFileURL(join(__dirname, 'lib', 'stdin.mjs')).href);
+const { atomicWriteFileSync } = await import(pathToFileURL(join(__dirname, 'lib', 'atomic-write.mjs')).href);
 
 // Constants
 const NOTEPAD_TEMPLATE = '# Notepad\n' +

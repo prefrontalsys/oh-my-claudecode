@@ -115,7 +115,7 @@ export { MODE_CONFIGS, getStateDir, ensureStateDir as ensureModeStateDir, getSta
 isModeActive, getActiveExclusiveMode, canStartMode, getAllModeStatuses, createModeMarker, removeModeMarker, readModeMarker } from './mode-registry/index.js';
 export { 
 // Setup Hook
-ensureDirectoryStructure, validateConfigFiles, setEnvironmentVariables, processSetupInit, pruneOldStateFiles, cleanupOrphanedState, vacuumSwarmDb, processSetupMaintenance, processSetup } from './setup/index.js';
+ensureDirectoryStructure, validateConfigFiles, setEnvironmentVariables, processSetupInit, pruneOldStateFiles, cleanupOrphanedState, processSetupMaintenance, processSetup } from './setup/index.js';
 export { 
 // Beads Context
 getBeadsInstructions, getBeadsContextConfig, registerBeadsContext, clearBeadsContext, BEADS_INSTRUCTIONS, BEADS_RUST_INSTRUCTIONS } from './beads-context/index.js';

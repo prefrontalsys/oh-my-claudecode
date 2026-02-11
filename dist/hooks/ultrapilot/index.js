@@ -25,12 +25,12 @@ export { generateDecompositionPrompt, parseDecompositionResult, generateParallel
  * @param config - Configuration options
  * @returns Initialized ultrapilot state
  */
-export async function startUltrapilot(cwd, task, config) {
+export async function startUltrapilot(cwd, task, config, sessionId) {
     const mergedConfig = { ...DEFAULT_CONFIG, ...config };
     // Decompose task into parallelizable subtasks
     const subtasks = await decomposeTask(task, mergedConfig);
     // Initialize state
-    const state = initUltrapilot(cwd, task, subtasks, undefined, mergedConfig);
+    const state = initUltrapilot(cwd, task, subtasks, sessionId, mergedConfig);
     if (!state) {
         throw new Error('Failed to initialize ultrapilot: another mode is active');
     }

@@ -54,6 +54,9 @@ function readCache() {
             if (cache.data.sonnetWeeklyResetsAt) {
                 cache.data.sonnetWeeklyResetsAt = new Date(cache.data.sonnetWeeklyResetsAt);
             }
+            if (cache.data.opusWeeklyResetsAt) {
+                cache.data.opusWeeklyResetsAt = new Date(cache.data.opusWeeklyResetsAt);
+            }
             if (cache.data.monthlyResetsAt) {
                 cache.data.monthlyResetsAt = new Date(cache.data.monthlyResetsAt);
             }
@@ -418,6 +421,13 @@ function parseUsageResponse(response) {
     if (sonnetSevenDay != null) {
         result.sonnetWeeklyPercent = clamp(sonnetSevenDay);
         result.sonnetWeeklyResetsAt = parseDate(sonnetResetsAt);
+    }
+    // Add Opus-specific quota if available from API
+    const opusSevenDay = response.seven_day_opus?.utilization;
+    const opusResetsAt = response.seven_day_opus?.resets_at;
+    if (opusSevenDay != null) {
+        result.opusWeeklyPercent = clamp(opusSevenDay);
+        result.opusWeeklyResetsAt = parseDate(opusResetsAt);
     }
     return result;
 }

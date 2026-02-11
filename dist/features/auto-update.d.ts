@@ -102,6 +102,12 @@ export declare function isSilentAutoUpdateEnabled(): boolean;
  */
 export declare function isEcomodeEnabled(): boolean;
 /**
+ * Check if team feature is enabled
+ * Returns false by default - requires explicit opt-in
+ * Checks ~/.claude/settings.json first, then env var fallback
+ */
+export declare function isTeamEnabled(): boolean;
+/**
  * Version metadata stored after installation
  */
 export interface VersionMetadata {
@@ -193,6 +199,7 @@ export declare function reconcileUpdateRuntime(options?: {
 export declare function performUpdate(options?: {
     skipConfirmation?: boolean;
     verbose?: boolean;
+    standalone?: boolean;
 }): Promise<UpdateResult>;
 /**
  * Get a formatted update notification message

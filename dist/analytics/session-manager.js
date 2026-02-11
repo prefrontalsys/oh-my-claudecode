@@ -1,4 +1,4 @@
-import { readState, writeState, StateLocation } from '../features/state-manager/index.js';
+import { readState, writeState, clearState, StateLocation } from '../features/state-manager/index.js';
 import { getTokenTracker } from './token-tracker.js';
 import { getGitDiffStats } from '../hooks/omc-orchestrator/index.js';
 import * as path from 'path';
@@ -118,7 +118,7 @@ export class SessionManager {
     async getCurrentSession() {
         if (!this.currentSession) {
             // Try to load from state
-            const result = readState('current-session', StateLocation.LOCAL);
+            const result = readState('current-session', StateLocation.GLOBAL);
             if (result.exists && result.data && result.data.status === 'active') {
                 this.currentSession = result.data;
             }
@@ -226,14 +226,16 @@ export class SessionManager {
     }
     async saveCurrentSession() {
         if (this.currentSession) {
-            writeState('current-session', this.currentSession, StateLocation.LOCAL);
+            writeState('current-session', this.currentSession, StateLocation.GLOBAL);
         }
     }
     async loadHistory() {
         if (this.history) {
             return this.history;
         }
-        const result = readState(SESSION_HISTORY_FILE, StateLocation.LOCAL);
+        // Migration: check if local session history exists and needs to be moved to global
+        await this.migrateLocalToGlobal();
+        const result = readState(SESSION_HISTORY_FILE, StateLocation.GLOBAL);
         if (result.exists && result.data) {
             this.history = result.data;
             return result.data;
@@ -248,6 +250,110 @@ export class SessionManager {
             lastUpdated: new Date().toISOString()
         };
         return this.history;
+    }
+    /**
+     * Migrate session history from local (.omc/state/) to global (~/.omc/state/).
+     * Runs once on first loadHistory() call. Handles three cases:
+     * - Local exists, global doesn't: copy local to global
+     * - Both exist: merge, dedup by session ID
+     * - Only global or neither: no-op
+     */
+    async migrateLocalToGlobal() {
+        const localResult = readState(SESSION_HISTORY_FILE, StateLocation.LOCAL);
+        if (!localResult.exists || !localResult.data) {
+            return; // Nothing to migrate
+        }
+        const globalResult = readState(SESSION_HISTORY_FILE, StateLocation.GLOBAL);
+        let writeSuccess = false;
+        if (!globalResult.exists || !globalResult.data) {
+            // Case 1: Local exists, global doesn't - just copy
+            const result = writeState(SESSION_HISTORY_FILE, localResult.data, StateLocation.GLOBAL);
+            writeSuccess = result.success;
+            if (writeSuccess) {
+                console.log('[session-manager] Migrated session history from local to global state');
+            }
+        }
+        else {
+            // Case 2: Both exist - merge and dedup by session ID
+            const existingIds = new Set(globalResult.data.sessions.map(s => s.id));
+            const newSessions = localResult.data.sessions.filter(s => !existingIds.has(s.id));
+            if (newSessions.length > 0) {
+                const merged = {
+                    ...globalResult.data,
+                    sessions: [...globalResult.data.sessions, ...newSessions],
+                    totalSessions: globalResult.data.sessions.length + newSessions.length,
+                    lastUpdated: new Date().toISOString()
+                };
+                const result = writeState(SESSION_HISTORY_FILE, merged, StateLocation.GLOBAL);
+                writeSuccess = result.success;
+                if (writeSuccess) {
+                    console.log(`[session-manager] Merged ${newSessions.length} sessions from local to global state`);
+                }
+            }
+            else {
+                // Nothing new to merge, safe to clean up local
+                writeSuccess = true;
+            }
+        }
+        // Only clean up local copy after confirmed successful global write
+        if (writeSuccess) {
+            try {
+                clearState(SESSION_HISTORY_FILE, StateLocation.LOCAL);
+            }
+            catch (error) {
+                console.warn('[session-manager] Failed to clean up local session history after migration:', error instanceof Error ? error.message : String(error));
+            }
+        }
+        // Also migrate current-session if it exists locally
+        const localCurrentSession = readState('current-session', StateLocation.LOCAL);
+        if (localCurrentSession.exists && localCurrentSession.data) {
+            const globalCurrentSession = readState('current-session', StateLocation.GLOBAL);
+            if (!globalCurrentSession.exists) {
+                const result = writeState('current-session', localCurrentSession.data, StateLocation.GLOBAL);
+                if (result.success) {
+                    try {
+                        clearState('current-session', StateLocation.LOCAL);
+                    }
+                    catch {
+                        // Best effort cleanup
+                    }
+                }
+            }
+            else {
+                // Global already has current-session - validate before cleaning up local
+                // Prefer the newer session to avoid discarding active state
+                const globalData = globalCurrentSession.data;
+                const localData = localCurrentSession.data;
+                if (globalData && localData) {
+                    const globalTime = globalData.endTime || globalData.startTime || '';
+                    const localTime = localData.endTime || localData.startTime || '';
+                    if (localTime > globalTime) {
+                        // Local is newer — overwrite global with local, then clean up
+                        const result = writeState('current-session', localData, StateLocation.GLOBAL);
+                        if (result.success) {
+                            try {
+                                clearState('current-session', StateLocation.LOCAL);
+                            }
+                            catch {
+                                // Best effort cleanup
+                            }
+                        }
+                    }
+                    else {
+                        // Global is newer or same — safe to clean up local
+                        try {
+                            clearState('current-session', StateLocation.LOCAL);
+                        }
+                        catch {
+                            // Best effort cleanup
+                        }
+                    }
+                }
+                else {
+                    // Can't compare — leave local in place (fail safe)
+                }
+            }
+        }
     }
     async addToHistory(session) {
         const history = await this.loadHistory();
@@ -268,7 +374,7 @@ export class SessionManager {
             totalCost += analytics.totalCost;
         }
         history.totalCost = totalCost;
-        writeState(SESSION_HISTORY_FILE, history, StateLocation.LOCAL);
+        writeState(SESSION_HISTORY_FILE, history, StateLocation.GLOBAL);
         this.history = history;
     }
     generateSessionId() {

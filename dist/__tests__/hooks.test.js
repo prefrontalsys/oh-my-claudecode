@@ -7,6 +7,7 @@ import { formatTodoStatus, getNextPendingTodo } from '../hooks/todo-continuation
 import { resetTodoContinuationAttempts } from '../hooks/persistent-mode/index.js';
 import { startUltraQA, clearUltraQAState, isRalphLoopActive } from '../hooks/ultraqa/index.js';
 import { createRalphLoopHook, clearRalphState, isUltraQAActive } from '../hooks/ralph/index.js';
+import { processHook } from '../hooks/bridge.js';
 describe('Keyword Detector', () => {
     describe('extractPromptText', () => {
         it('should extract text from text parts', () => {
@@ -184,13 +185,13 @@ describe('Keyword Detector', () => {
                 expect(detected[0].keyword).toBe(term);
             }
         });
-        it('should detect ultrapilot keyword', () => {
+        it('should route legacy ultrapilot keyword to team', () => {
             const detected = detectKeywordsWithType('use ultrapilot for this');
             expect(detected).toHaveLength(1);
-            expect(detected[0].type).toBe('ultrapilot');
+            expect(detected[0].type).toBe('team');
             expect(detected[0].keyword).toBe('ultrapilot');
         });
-        it('should detect ultrapilot patterns', () => {
+        it('should route legacy ultrapilot patterns to team', () => {
             const patterns = [
                 'ultrapilot this project',
                 'parallel build the app',
@@ -199,8 +200,8 @@ describe('Keyword Detector', () => {
             for (const pattern of patterns) {
                 const detected = detectKeywordsWithType(pattern);
                 expect(detected.length).toBeGreaterThan(0);
-                const hasUltrapilot = detected.some(d => d.type === 'ultrapilot');
-                expect(hasUltrapilot).toBe(true);
+                const hasTeam = detected.some(d => d.type === 'team');
+                expect(hasTeam).toBe(true);
             }
         });
         it('should detect ecomode keyword', () => {
@@ -218,16 +219,16 @@ describe('Keyword Detector', () => {
                 expect(detected[0].keyword).toBe(term);
             }
         });
-        it('should detect swarm keyword', () => {
+        it('should route legacy swarm keyword to team', () => {
             const detected = detectKeywordsWithType('swarm 5 agents to fix this');
             expect(detected).toHaveLength(1);
-            expect(detected[0].type).toBe('swarm');
+            expect(detected[0].type).toBe('team');
             expect(detected[0].keyword).toBe('swarm 5 agents');
         });
-        it('should detect coordinated agents pattern', () => {
+        it('should route coordinated agents pattern to team', () => {
             const detected = detectKeywordsWithType('use coordinated agents');
             expect(detected).toHaveLength(1);
-            expect(detected[0].type).toBe('swarm');
+            expect(detected[0].type).toBe('team');
             expect(detected[0].keyword).toBe('coordinated agents');
         });
         it('should detect pipeline keyword', () => {
@@ -444,20 +445,20 @@ describe('Keyword Detector', () => {
             expect(primary).not.toBeNull();
             expect(primary.type).toBe('ralph');
         });
-        it('should prioritize ultrapilot correctly', () => {
+        it('should prioritize team for legacy ultrapilot trigger', () => {
             const primary = getPrimaryKeyword('ultrapilot this task');
             expect(primary).not.toBeNull();
-            expect(primary.type).toBe('ultrapilot');
+            expect(primary.type).toBe('team');
         });
         it('should prioritize ecomode correctly', () => {
             const primary = getPrimaryKeyword('use efficient mode for this');
             expect(primary).not.toBeNull();
             expect(primary.type).toBe('ecomode');
         });
-        it('should prioritize swarm correctly', () => {
+        it('should prioritize team for legacy swarm trigger', () => {
             const primary = getPrimaryKeyword('swarm 5 agents for this');
             expect(primary).not.toBeNull();
-            expect(primary.type).toBe('swarm');
+            expect(primary.type).toBe('team');
         });
         it('should prioritize pipeline correctly', () => {
             const primary = getPrimaryKeyword('pipeline the task');
@@ -494,6 +495,96 @@ describe('Keyword Detector', () => {
             expect(primary).not.toBeNull();
             expect(primary.type).toBe('analyze');
         });
+    });
+});
+describe('Team staged workflow integration', () => {
+    let testDir;
+    const sessionId = 'team-session-test';
+    beforeEach(() => {
+        testDir = join(tmpdir(), `omc-team-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+        mkdirSync(join(testDir, '.omc', 'state', 'sessions', sessionId), { recursive: true });
+    });
+    afterEach(() => {
+        rmSync(testDir, { recursive: true, force: true });
+    });
+    it('restores active Team stage on session-start', async () => {
+        writeFileSync(join(testDir, '.omc', 'state', 'sessions', sessionId, 'team-state.json'), JSON.stringify({
+            active: true,
+            session_id: sessionId,
+            stage: 'team-exec',
+            team_name: 'delivery-team'
+        }));
+        const result = await processHook('session-start', {
+            sessionId,
+            directory: testDir,
+        });
+        expect(result.continue).toBe(true);
+        expect(result.message || '').toContain('[TEAM MODE RESTORED]');
+        expect(result.message || '').toContain('delivery-team');
+        expect(result.message || '').toContain('team-exec');
+    });
+    it('emits terminal Team restore guidance on cancelled stage', async () => {
+        writeFileSync(join(testDir, '.omc', 'state', 'sessions', sessionId, 'team-state.json'), JSON.stringify({
+            active: true,
+            session_id: sessionId,
+            stage: 'team-fix',
+            status: 'cancelled',
+            team_name: 'delivery-team'
+        }));
+        const result = await processHook('session-start', {
+            sessionId,
+            directory: testDir,
+        });
+        expect(result.continue).toBe(true);
+        expect(result.message || '').toContain('[TEAM MODE TERMINAL STATE DETECTED]');
+        expect(result.message || '').toContain('cancel');
+    });
+    it('enforces verify stage continuation while active and non-terminal', async () => {
+        writeFileSync(join(testDir, '.omc', 'state', 'sessions', sessionId, 'team-state.json'), JSON.stringify({
+            active: true,
+            session_id: sessionId,
+            stage: 'team-verify',
+            team_name: 'delivery-team'
+        }));
+        const result = await processHook('persistent-mode', {
+            sessionId,
+            directory: testDir,
+        });
+        expect(result.continue).toBe(true);
+        expect(result.message).toContain('[TEAM MODE CONTINUATION]');
+        expect(result.message).toContain('team-verify');
+        expect(result.message).toContain('Continue verification');
+    });
+    it('enforces fix stage continuation while active and non-terminal', async () => {
+        writeFileSync(join(testDir, '.omc', 'state', 'sessions', sessionId, 'team-state.json'), JSON.stringify({
+            active: true,
+            session_id: sessionId,
+            stage: 'team-fix',
+            team_name: 'delivery-team'
+        }));
+        const result = await processHook('persistent-mode', {
+            sessionId,
+            directory: testDir,
+        });
+        expect(result.continue).toBe(true);
+        expect(result.message).toContain('[TEAM MODE CONTINUATION]');
+        expect(result.message).toContain('team-fix');
+        expect(result.message).toContain('fix loop');
+    });
+    it('allows terminal cleanup when Team stage is cancelled', async () => {
+        writeFileSync(join(testDir, '.omc', 'state', 'sessions', sessionId, 'team-state.json'), JSON.stringify({
+            active: true,
+            session_id: sessionId,
+            stage: 'team-verify',
+            status: 'cancelled',
+            team_name: 'delivery-team'
+        }));
+        const result = await processHook('persistent-mode', {
+            sessionId,
+            directory: testDir,
+        });
+        expect(result.continue).toBe(true);
+        expect(result.message || '').not.toContain('[TEAM MODE CONTINUATION]');
     });
 });
 describe('Todo Continuation', () => {
@@ -1083,8 +1174,11 @@ describe('Mutual Exclusion - UltraQA and Ralph', () => {
     });
     describe('UltraQA mutual exclusion', () => {
         it('should fail to start UltraQA when Ralph is active', () => {
-            // Activate Ralph first
-            const ralphStateFile = join(testDir, '.omc', 'state', 'ralph-state.json');
+            // Activate Ralph first - write to session-scoped path since startUltraQA
+            // passes sessionId which makes readRalphState check session path only
+            const sessionDir = join(testDir, '.omc', 'state', 'sessions', 'test-session');
+            mkdirSync(sessionDir, { recursive: true });
+            const ralphStateFile = join(sessionDir, 'ralph-state.json');
             writeFileSync(ralphStateFile, JSON.stringify({ active: true }));
             // Try to start UltraQA
             const result = startUltraQA(testDir, 'tests', 'test-session');
@@ -1109,8 +1203,11 @@ describe('Mutual Exclusion - UltraQA and Ralph', () => {
     });
     describe('Ralph mutual exclusion', () => {
         it('should fail to start Ralph when UltraQA is active', () => {
-            // Activate UltraQA first
-            const ultraqaStateFile = join(testDir, '.omc', 'state', 'ultraqa-state.json');
+            // Activate UltraQA first - write to session-scoped path since startLoop
+            // passes sessionId which makes isUltraQAActive check session path only
+            const sessionDir = join(testDir, '.omc', 'state', 'sessions', 'test-session');
+            mkdirSync(sessionDir, { recursive: true });
+            const ultraqaStateFile = join(sessionDir, 'ultraqa-state.json');
             writeFileSync(ultraqaStateFile, JSON.stringify({ active: true }));
             // Try to start Ralph
             const hook = createRalphLoopHook(testDir);

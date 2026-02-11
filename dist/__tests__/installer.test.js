@@ -248,9 +248,13 @@ describe('Installer Constants', () => {
             // Semantic versioning pattern (with optional beta suffix)
             expect(VERSION).toMatch(/^\d+\.\d+\.\d+(-[\w.]+)?$/);
         });
-        it('should match package.json version', () => {
-            // This is a runtime check - VERSION should match the package.json
-            expect(VERSION).toBe('4.1.5');
+        it('should match package.json version', async () => {
+            const { readFileSync } = await import('fs');
+            const { join, dirname } = await import('path');
+            const { fileURLToPath } = await import('url');
+            const __dirname = dirname(fileURLToPath(import.meta.url));
+            const pkg = JSON.parse(readFileSync(join(__dirname, '..', '..', 'package.json'), 'utf-8'));
+            expect(VERSION).toBe(pkg.version);
         });
     });
     describe('File Paths', () => {

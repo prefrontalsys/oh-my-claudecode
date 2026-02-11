@@ -18,6 +18,7 @@ export declare const GEMINI_DEFAULT_MODEL: string;
 export declare const GEMINI_TIMEOUT: number;
 export declare const GEMINI_RECOMMENDED_ROLES: readonly ["designer", "writer", "vision"];
 export declare const MAX_FILE_SIZE: number;
+export declare const MAX_STDOUT_BYTES: number;
 /**
  * Check if Gemini output/stderr indicates a rate-limit (429) or quota error
  * that should trigger a fallback to the next model in the chain.

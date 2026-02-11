@@ -10,18 +10,45 @@
  * - Dynamic import of better-sqlite3 with graceful fallback
  * - WAL mode for concurrency
  * - Schema versioning with migrations
- * - Module-level singleton db variable
+ * - Per-worktree db instances keyed by resolved path
  * - All functions return false/null on failure (no throws)
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync } from "fs";
-import { join } from "path";
+import { join, resolve } from "path";
 // Schema version - bump when adding migrations
 const DB_SCHEMA_VERSION = 1;
 // Default max age for cleanup: 24 hours
 const DEFAULT_CLEANUP_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 // Dynamic import for better-sqlite3 to handle environments where it's not installed
 let Database = null;
-let db = null;
+// Map of resolved worktree root path -> database instance (replaces singleton)
+const dbMap = new Map();
+// Track the last cwd used for backward-compatible no-arg calls
+let _lastCwd = null;
+/**
+ * Get the database instance for a given cwd.
+ * Falls back to the last initialized cwd if none provided.
+ */
+function getDb(cwd) {
+    if (cwd) {
+        const resolved = resolve(cwd);
+        return dbMap.get(resolved) ?? null;
+    }
+    // Emit deprecation warning when multiple DBs are open and no cwd provided
+    if (dbMap.size > 1) {
+        console.warn('[job-state-db] DEPRECATED: getDb() called without explicit cwd while multiple DBs are open. Pass cwd explicitly.');
+    }
+    // Backward compat: use last initialized cwd
+    if (_lastCwd) {
+        console.warn('[job-state-db] DEPRECATED: using _lastCwd fallback. Pass cwd explicitly.');
+        return dbMap.get(_lastCwd) ?? null;
+    }
+    // Return any available instance (single-worktree case)
+    if (dbMap.size === 1) {
+        return dbMap.values().next().value ?? null;
+    }
+    return null;
+}
 /**
  * Get the database file path
  */
@@ -88,9 +115,15 @@ export async function initJobDb(cwd) {
         if (!Database) {
             return false;
         }
+        const resolvedCwd = resolve(cwd);
+        // Return early if already initialized for this cwd
+        if (dbMap.has(resolvedCwd)) {
+            _lastCwd = resolvedCwd;
+            return true;
+        }
         ensureStateDir(cwd);
         const dbPath = getDbPath(cwd);
-        db = new Database(dbPath);
+        const db = new Database(dbPath);
         // Enable WAL mode for better concurrency (multiple MCP servers)
         db.pragma("journal_mode = WAL");
         // Create tables
@@ -136,6 +169,8 @@ export async function initJobDb(cwd) {
         // Set schema version
         const setVersion = db.prepare("INSERT OR REPLACE INTO schema_info (key, value) VALUES (?, ?)");
         setVersion.run("version", String(DB_SCHEMA_VERSION));
+        dbMap.set(resolvedCwd, db);
+        _lastCwd = resolvedCwd;
         return true;
     }
     catch (error) {
@@ -144,35 +179,74 @@ export async function initJobDb(cwd) {
     }
 }
 /**
- * Close the database connection.
+ * Close the database connection for a specific cwd, or all connections if no cwd provided.
  * Safe to call multiple times; no-ops if already closed.
+ *
+ * @deprecated When called without cwd, use closeAllJobDbs() instead for explicit intent.
  */
-export function closeJobDb() {
-    if (db) {
+export function closeJobDb(cwd) {
+    if (cwd) {
+        const resolvedCwd = resolve(cwd);
+        const db = dbMap.get(resolvedCwd);
+        if (db) {
+            try {
+                db.close();
+            }
+            catch { /* Ignore close errors */ }
+            dbMap.delete(resolvedCwd);
+            if (_lastCwd === resolvedCwd)
+                _lastCwd = null;
+        }
+    }
+    else {
+        if (dbMap.size > 0) {
+            console.warn('[job-state-db] DEPRECATED: closeJobDb() called without cwd. Use closeAllJobDbs() for explicit intent.');
+        }
+        // Close all connections
+        for (const [key, db] of dbMap.entries()) {
+            try {
+                db.close();
+            }
+            catch { /* Ignore close errors */ }
+            dbMap.delete(key);
+        }
+        _lastCwd = null;
+    }
+}
+/**
+ * Explicitly close all open database connections.
+ * Preferred over calling closeJobDb() without arguments.
+ */
+export function closeAllJobDbs() {
+    for (const [key, db] of dbMap.entries()) {
         try {
             db.close();
         }
-        catch {
-            // Ignore close errors (already closed, etc.)
-        }
-        db = null;
+        catch { /* Ignore close errors */ }
+        dbMap.delete(key);
     }
+    _lastCwd = null;
 }
 /**
  * Check if the job database is initialized and connected.
  *
+ * @param cwd - Optional cwd to check specific instance; if omitted, checks if any instance exists
  * @returns true if the database is ready for queries
  */
-export function isJobDbInitialized() {
-    return db !== null;
+export function isJobDbInitialized(cwd) {
+    if (cwd) {
+        return dbMap.has(resolve(cwd));
+    }
+    return dbMap.size > 0;
 }
 /**
  * Get the raw database instance for advanced use.
  *
+ * @param cwd - Optional cwd to get specific instance
  * @returns The better-sqlite3 Database instance, or null if not initialized
  */
-export function getJobDb() {
-    return db;
+export function getJobDb(cwd) {
+    return getDb(cwd);
 }
 // --- CRUD Operations ---
 /**
@@ -183,7 +257,8 @@ export function getJobDb() {
  * @param status - The JobStatus to persist
  * @returns true if the upsert succeeded, false on failure
  */
-export function upsertJob(status) {
+export function upsertJob(status, cwd) {
+    const db = getDb(cwd);
     if (!db)
         return false;
     try {
@@ -210,7 +285,8 @@ export function upsertJob(status) {
  * @param jobId - The unique job identifier
  * @returns The JobStatus if found, null otherwise
  */
-export function getJob(provider, jobId) {
+export function getJob(provider, jobId, cwd) {
+    const db = getDb(cwd);
     if (!db)
         return null;
     try {
@@ -232,7 +308,8 @@ export function getJob(provider, jobId) {
  * @param status - Filter by status string
  * @returns Array of matching JobStatus objects, empty array on failure
  */
-export function getJobsByStatus(provider, status) {
+export function getJobsByStatus(provider, status, cwd) {
+    const db = getDb(cwd);
     if (!db)
         return [];
     try {
@@ -259,7 +336,8 @@ export function getJobsByStatus(provider, status) {
  * @param provider - Filter by provider, or undefined for all providers
  * @returns Array of active JobStatus objects, empty array on failure
  */
-export function getActiveJobs(provider) {
+export function getActiveJobs(provider, cwd) {
+    const db = getDb(cwd);
     if (!db)
         return [];
     try {
@@ -288,7 +366,8 @@ export function getActiveJobs(provider) {
  * @param withinMs - Time window in milliseconds (default: 1 hour)
  * @returns Array of recent JobStatus objects, empty array on failure
  */
-export function getRecentJobs(provider, withinMs = 60 * 60 * 1000) {
+export function getRecentJobs(provider, withinMs = 60 * 60 * 1000, cwd) {
+    const db = getDb(cwd);
     if (!db)
         return [];
     try {
@@ -319,7 +398,8 @@ export function getRecentJobs(provider, withinMs = 60 * 60 * 1000) {
  * @param updates - Partial JobStatus with fields to update
  * @returns true if the update succeeded, false on failure
  */
-export function updateJobStatus(provider, jobId, updates) {
+export function updateJobStatus(provider, jobId, updates, cwd) {
+    const db = getDb(cwd);
     if (!db)
         return false;
     try {
@@ -385,7 +465,8 @@ export function updateJobStatus(provider, jobId, updates) {
  * @param jobId - The unique job identifier
  * @returns true if deletion succeeded, false on failure
  */
-export function deleteJob(provider, jobId) {
+export function deleteJob(provider, jobId, cwd) {
+    const db = getDb(cwd);
     if (!db)
         return false;
     try {
@@ -407,8 +488,9 @@ export function deleteJob(provider, jobId) {
  * @param promptsDir - Path to the .omc/prompts/ directory
  * @returns Object with imported and error counts
  */
-export function migrateFromJsonFiles(promptsDir) {
+export function migrateFromJsonFiles(promptsDir, cwd) {
     const result = { imported: 0, errors: 0 };
+    const db = getDb(cwd);
     if (!db)
         return result;
     if (!existsSync(promptsDir))
@@ -427,7 +509,7 @@ export function migrateFromJsonFiles(promptsDir) {
                         result.errors++;
                         continue;
                     }
-                    if (upsertJob(status)) {
+                    if (upsertJob(status, cwd)) {
                         result.imported++;
                     }
                     else {
@@ -454,7 +536,8 @@ export function migrateFromJsonFiles(promptsDir) {
  * @param maxAgeMs - Maximum age in milliseconds (default: 24 hours)
  * @returns Number of jobs deleted, 0 on failure
  */
-export function cleanupOldJobs(maxAgeMs = DEFAULT_CLEANUP_MAX_AGE_MS) {
+export function cleanupOldJobs(maxAgeMs = DEFAULT_CLEANUP_MAX_AGE_MS, cwd) {
+    const db = getDb(cwd);
     if (!db)
         return 0;
     try {
@@ -478,7 +561,8 @@ export function cleanupOldJobs(maxAgeMs = DEFAULT_CLEANUP_MAX_AGE_MS) {
  *
  * @returns Object with total, active, completed, and failed counts, or null on failure
  */
-export function getJobStats() {
+export function getJobStats(cwd) {
+    const db = getDb(cwd);
     if (!db)
         return null;
     try {
@@ -509,13 +593,14 @@ export function getJobStats() {
  *
  * @returns Formatted markdown string, or empty string on failure
  */
-export function getJobSummaryForPreCompact() {
+export function getJobSummaryForPreCompact(cwd) {
+    const db = getDb(cwd);
     if (!db)
         return "";
     try {
         const lines = [];
         // Active jobs with full details
-        const activeJobs = getActiveJobs();
+        const activeJobs = getActiveJobs(undefined, cwd);
         if (activeJobs.length > 0) {
             lines.push("## Active Background Jobs");
             lines.push("");
@@ -532,7 +617,7 @@ export function getJobSummaryForPreCompact() {
             lines.push("");
         }
         // Recent completed/failed jobs (last hour) - brief summary
-        const recentJobs = getRecentJobs(undefined, 60 * 60 * 1000);
+        const recentJobs = getRecentJobs(undefined, 60 * 60 * 1000, cwd);
         const terminalJobs = recentJobs.filter((j) => j.status === "completed" || j.status === "failed" || j.status === "timeout");
         if (terminalJobs.length > 0) {
             lines.push("## Recent Completed Jobs (last hour)");
@@ -551,7 +636,7 @@ export function getJobSummaryForPreCompact() {
             lines.push("");
         }
         // Overall stats
-        const stats = getJobStats();
+        const stats = getJobStats(cwd);
         if (stats && stats.total > 0) {
             lines.push(`**Job totals:** ${stats.total} total, ${stats.active} active, ${stats.completed} completed, ${stats.failed} failed`);
         }

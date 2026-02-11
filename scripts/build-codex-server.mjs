@@ -5,10 +5,25 @@
  */
 
 import * as esbuild from 'esbuild';
-import { mkdir } from 'fs/promises';
+import { mkdir, readdir, readFile } from 'fs/promises';
+import { basename, join } from 'path';
 
 // Output to bridge/ directory (not gitignored) for plugin distribution
 const outfile = 'bridge/codex-server.cjs';
+
+// Scan agents/*.md at build time to embed roles and prompts in the bundle.
+// This eliminates fragile runtime filesystem scanning from CJS bundles.
+const agentFiles = (await readdir('agents')).filter(f => f.endsWith('.md')).sort();
+const agentRoles = agentFiles.map(f => basename(f, '.md'));
+
+// Read and strip frontmatter from each agent prompt
+const agentPrompts = {};
+for (const file of agentFiles) {
+  const content = await readFile(join('agents', file), 'utf-8');
+  const match = content.match(/^---[\s\S]*?---\s*([\s\S]*)$/);
+  agentPrompts[basename(file, '.md')] = match ? match[1].trim() : content.trim();
+}
+console.log(`Embedding ${agentRoles.length} agent roles + prompts into ${outfile}`);
 
 // Ensure output directory exists
 await mkdir('bridge', { recursive: true });
@@ -36,6 +51,11 @@ await esbuild.build({
   format: 'cjs',
   outfile,
   banner: { js: banner },
+  // Inject build-time constants: agent roles list and prompt contents
+  define: {
+    '__AGENT_ROLES__': JSON.stringify(agentRoles),
+    '__AGENT_PROMPTS__': JSON.stringify(agentPrompts),
+  },
   // Prefer ESM entry points so UMD packages (e.g. jsonc-parser) get properly bundled
   mainFields: ['module', 'main'],
   // Externalize Node.js built-ins and native modules

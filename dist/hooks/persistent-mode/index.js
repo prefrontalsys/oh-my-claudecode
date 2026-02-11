@@ -18,6 +18,7 @@ import { checkIncompleteTodos, getNextPendingTodo, isUserAbort, isContextLimitSt
 import { TODO_CONTINUATION_PROMPT } from '../../installer/hooks.js';
 import { isAutopilotActive } from '../autopilot/index.js';
 import { checkAutopilot } from '../autopilot/enforcement.js';
+import { readTeamPipelineState } from '../team-pipeline/state.js';
 /** Maximum todo-continuation attempts before giving up (prevents infinite loops) */
 const MAX_TODO_CONTINUATION_ATTEMPTS = 5;
 /** Track todo-continuation attempts per session to prevent infinite loops */
@@ -185,6 +186,43 @@ async function checkRalphLoop(sessionId, directory) {
     // Strict session isolation: only process state for matching session
     if (state.session_id !== sessionId) {
         return null;
+    }
+    // Check team pipeline state coordination
+    // When team mode is active alongside ralph, respect team phase transitions
+    const teamState = readTeamPipelineState(workingDir, sessionId);
+    if (teamState && teamState.active !== undefined) {
+        const teamPhase = teamState.phase;
+        // If team pipeline reached a terminal state, ralph should also complete
+        if (teamPhase === 'complete') {
+            clearRalphState(workingDir, sessionId);
+            clearVerificationState(workingDir, sessionId);
+            deactivateUltrawork(workingDir, sessionId);
+            return {
+                shouldBlock: false,
+                message: `[RALPH LOOP COMPLETE - TEAM] Team pipeline completed successfully. Ralph loop ending after ${state.iteration} iteration(s).`,
+                mode: 'none'
+            };
+        }
+        if (teamPhase === 'failed') {
+            clearRalphState(workingDir, sessionId);
+            clearVerificationState(workingDir, sessionId);
+            deactivateUltrawork(workingDir, sessionId);
+            return {
+                shouldBlock: false,
+                message: `[RALPH LOOP STOPPED - TEAM FAILED] Team pipeline failed. Ralph loop ending after ${state.iteration} iteration(s).`,
+                mode: 'none'
+            };
+        }
+        if (teamPhase === 'cancelled') {
+            clearRalphState(workingDir, sessionId);
+            clearVerificationState(workingDir, sessionId);
+            deactivateUltrawork(workingDir, sessionId);
+            return {
+                shouldBlock: false,
+                message: `[RALPH LOOP CANCELLED - TEAM] Team pipeline was cancelled. Ralph loop ending after ${state.iteration} iteration(s).`,
+                mode: 'none'
+            };
+        }
     }
     // Check for PRD-based completion (all stories have passes: true)
     const prdStatus = getPrdCompletionStatus(workingDir);

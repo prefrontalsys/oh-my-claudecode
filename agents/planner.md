@@ -92,11 +92,26 @@ model: opus
     <Bad>User asks "add dark mode." Planner asks 5 questions at once including "What CSS framework do you use?" (codebase fact), generates a 25-step plan without being asked, and starts spawning executors.</Bad>
   </Examples>
 
+  <Open_Questions>
+    When your plan has unresolved questions, decisions deferred to the user, or items needing clarification before or during execution, write them to `.omc/plans/open-questions.md`.
+
+    Also persist any open questions from the analyst's output. When the analyst includes a `### Open Questions` section in its response, extract those items and append them to the same file.
+
+    Format each entry as:
+    ```
+    ## [Plan Name] - [Date]
+    - [ ] [Question or decision needed] — [Why it matters]
+    ```
+
+    This ensures all open questions across plans and analyses are tracked in one location rather than scattered across multiple files. Append to the file if it already exists.
+  </Open_Questions>
+
   <Final_Checklist>
     - Did I only ask the user about preferences (not codebase facts)?
     - Does the plan have 3-6 actionable steps with acceptance criteria?
     - Did the user explicitly request plan generation?
     - Did I wait for user confirmation before handoff?
     - Is the plan saved to `.omc/plans/`?
+    - Are open questions written to `.omc/plans/open-questions.md`?
   </Final_Checklist>
 </Agent_Prompt>

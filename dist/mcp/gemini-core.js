@@ -12,11 +12,13 @@
  * - gemini-standalone-server.ts (stdio-based external process server)
  */
 import { spawn } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'fs';
-import { dirname, resolve, relative, sep, isAbsolute, basename, join } from 'path';
+import { readFileSync, realpathSync, statSync } from 'fs';
+import { resolve, relative, sep, isAbsolute } from 'path';
+import { createStdoutCollector, safeWriteOutputFile } from './shared-exec.js';
 import { detectGeminiCli } from './cli-detection.js';
 import { getWorktreeRoot } from '../lib/worktree-paths.js';
-import { resolveSystemPrompt, buildPromptWithSystemContext, VALID_AGENT_ROLES } from './prompt-injection.js';
+import { isExternalPromptAllowed } from './mcp-config.js';
+import { resolveSystemPrompt, buildPromptWithSystemContext, wrapUntrustedFileContent, isValidAgentRoleName, VALID_AGENT_ROLES } from './prompt-injection.js';
 import { persistPrompt, persistResponse, getExpectedResponsePath } from './prompt-persistence.js';
 import { writeJobStatus, getStatusFilePath, readJobStatus } from './prompt-persistence.js';
 import { resolveExternalModel, buildFallbackChain, GEMINI_MODEL_FALLBACKS, } from '../features/model-routing/external-model-policy.js';
@@ -42,6 +44,7 @@ export const GEMINI_TIMEOUT = Math.min(Math.max(5000, parseInt(process.env.OMC_G
 // Gemini is best for design review and implementation tasks (recommended, not enforced)
 export const GEMINI_RECOMMENDED_ROLES = ['designer', 'writer', 'vision'];
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
+export const MAX_STDOUT_BYTES = 10 * 1024 * 1024; // 10MB stdout cap
 /**
  * Check if Gemini output/stderr indicates a rate-limit (429) or quota error
  * that should trigger a fallback to the next model in the chain.
@@ -86,10 +89,10 @@ export function executeGemini(prompt, model, cwd) {
                 reject(new Error(`Gemini timed out after ${GEMINI_TIMEOUT}ms`));
             }
         }, GEMINI_TIMEOUT);
-        let stdout = '';
+        const collector = createStdoutCollector(MAX_STDOUT_BYTES);
         let stderr = '';
         child.stdout.on('data', (data) => {
-            stdout += data.toString();
+            collector.append(data.toString());
         });
         child.stderr.on('data', (data) => {
             stderr += data.toString();
@@ -98,6 +101,7 @@ export function executeGemini(prompt, model, cwd) {
             if (!settled) {
                 settled = true;
                 clearTimeout(timeoutHandle);
+                const stdout = collector.toString();
                 if (code === 0 || stdout.trim()) {
                     // Check for retryable errors even on "successful" exit
                     const retryable = isGeminiRetryableError(stdout, stderr);
@@ -183,7 +187,7 @@ export function executeGeminiBackground(fullPrompt, modelInput, jobMeta, working
                 spawnedAt: new Date().toISOString(),
             };
             writeJobStatus(initialStatus, workingDirectory);
-            let stdout = '';
+            const collector = createStdoutCollector(MAX_STDOUT_BYTES);
             let stderr = '';
             let settled = false;
             const timeoutHandle = setTimeout(() => {
@@ -206,7 +210,9 @@ export function executeGeminiBackground(fullPrompt, modelInput, jobMeta, working
                     }, workingDirectory);
                 }
             }, GEMINI_TIMEOUT);
-            child.stdout?.on('data', (data) => { stdout += data.toString(); });
+            child.stdout?.on('data', (data) => {
+                collector.append(data.toString());
+            });
             child.stderr?.on('data', (data) => { stderr += data.toString(); });
             child.stdin?.on('error', (err) => {
                 if (settled)
@@ -229,6 +235,7 @@ export function executeGeminiBackground(fullPrompt, modelInput, jobMeta, working
                 settled = true;
                 clearTimeout(timeoutHandle);
                 spawnedPids.delete(pid);
+                const stdout = collector.toString();
                 // Check if user killed this job
                 const currentStatus = readJobStatus('gemini', jobMeta.slug, jobMeta.jobId, workingDirectory);
                 if (currentStatus?.killedByUser) {
@@ -357,7 +364,7 @@ export function validateAndReadFile(filePath, baseDir) {
         if (stats.size > MAX_FILE_SIZE) {
             return `--- File: ${filePath} --- (File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB, max 5MB)`;
         }
-        return `--- File: ${filePath} ---\n${readFileSync(resolvedReal, 'utf-8')}`;
+        return wrapUntrustedFileContent(filePath, readFileSync(resolvedReal, 'utf-8'));
     }
     catch {
         return `--- File: ${filePath} --- (Error reading file)`;
@@ -384,18 +391,21 @@ export async function handleAskGemini(args) {
     const config = loadConfig();
     const resolved = resolveExternalModel(config.externalModels, {
         agentRole: agent_role,
+        explicitProvider: 'gemini',
         explicitModel: args.model, // user explicitly passed model
     });
     const resolvedModel = resolved.model;
     // Derive baseDir from working_directory if provided
     let baseDir = args.working_directory || process.cwd();
     let baseDirReal;
+    // Path policy for error messages
+    const pathPolicy = process.env.OMC_ALLOW_EXTERNAL_WORKDIR === '1' ? 'permissive' : 'strict';
     try {
         baseDirReal = realpathSync(baseDir);
     }
     catch (err) {
         return {
-            content: [{ type: 'text', text: `working_directory '${args.working_directory}' does not exist or is not accessible: ${err.message}` }],
+            content: [{ type: 'text', text: `E_WORKDIR_INVALID: working_directory '${args.working_directory}' does not exist or is not accessible.\nError: ${err.message}\nResolved working directory: ${baseDir}\nPath policy: ${pathPolicy}\nSuggested: ensure the working directory exists and is accessible` }],
             isError: true
         };
     }
@@ -415,14 +425,17 @@ export async function handleAskGemini(args) {
                 const relToWorktree = relative(worktreeReal, baseDirReal);
                 if (relToWorktree.startsWith('..') || isAbsolute(relToWorktree)) {
                     return {
-                        content: [{ type: 'text', text: `working_directory '${args.working_directory}' is outside the project worktree (${worktreeRoot}). Set OMC_ALLOW_EXTERNAL_WORKDIR=1 to bypass.` }],
+                        content: [{
+                                type: 'text',
+                                text: `E_WORKDIR_INVALID: working_directory '${args.working_directory}' is outside the project worktree (${worktreeRoot}).\nRequested: ${args.working_directory}\nResolved working directory: ${baseDirReal}\nWorktree root: ${worktreeRoot}\nPath policy: ${pathPolicy}\nSuggested: use a working_directory within the project worktree, or set OMC_ALLOW_EXTERNAL_WORKDIR=1 to bypass`
+                            }],
                         isError: true
                     };
                 }
             }
         }
     }
-    // Validate agent_role against the shared allowed agents list
+    // Validate agent_role - must be non-empty and pass character validation
     if (!agent_role || !agent_role.trim()) {
         return {
             content: [{
@@ -432,11 +445,21 @@ export async function handleAskGemini(args) {
             isError: true
         };
     }
+    if (!isValidAgentRoleName(agent_role)) {
+        return {
+            content: [{
+                    type: 'text',
+                    text: `Invalid agent_role: "${agent_role}". Role names must contain only lowercase letters, numbers, and hyphens. Recommended for Gemini: ${GEMINI_RECOMMENDED_ROLES.join(', ')}`
+                }],
+            isError: true
+        };
+    }
+    // Validate agent_role exists in discovered roles (allowlist enforcement)
     if (!VALID_AGENT_ROLES.includes(agent_role)) {
         return {
             content: [{
                     type: 'text',
-                    text: `Invalid agent_role: "${agent_role}". Must be one of: ${VALID_AGENT_ROLES.join(', ')}. Recommended for Gemini: ${GEMINI_RECOMMENDED_ROLES.join(', ')}`
+                    text: `Unknown agent_role: "${agent_role}". Available roles: ${VALID_AGENT_ROLES.join(', ')}. Recommended for Gemini: ${GEMINI_RECOMMENDED_ROLES.join(', ')}`
                 }],
             isError: true
         };
@@ -467,9 +490,12 @@ export async function handleAskGemini(args) {
     const resolvedPath = resolve(baseDir, args.prompt_file);
     const cwdReal = realpathSync(baseDir);
     const relPath = relative(cwdReal, resolvedPath);
-    if (relPath === '..' || relPath.startsWith('..' + sep) || isAbsolute(relPath)) {
+    if (!isExternalPromptAllowed() && (relPath === '..' || relPath.startsWith('..' + sep) || isAbsolute(relPath))) {
         return {
-            content: [{ type: 'text', text: `prompt_file '${args.prompt_file}' is outside the working directory.` }],
+            content: [{
+                    type: 'text',
+                    text: `E_PATH_OUTSIDE_WORKDIR_PROMPT: prompt_file '${args.prompt_file}' resolves outside working_directory '${baseDirReal}'.\nRequested: ${args.prompt_file}\nWorking directory: ${baseDirReal}\nResolved working directory: ${baseDirReal}\nPath policy: ${pathPolicy}\nSuggested: place the prompt file within the working directory or set working_directory to a common ancestor`
+                }],
             isError: true
         };
     }
@@ -485,9 +511,12 @@ export async function handleAskGemini(args) {
         };
     }
     const relReal = relative(cwdReal, resolvedReal);
-    if (relReal === '..' || relReal.startsWith('..' + sep) || isAbsolute(relReal)) {
+    if (!isExternalPromptAllowed() && (relReal === '..' || relReal.startsWith('..' + sep) || isAbsolute(relReal))) {
         return {
-            content: [{ type: 'text', text: `prompt_file '${args.prompt_file}' resolves to a path outside the working directory.` }],
+            content: [{
+                    type: 'text',
+                    text: `E_PATH_OUTSIDE_WORKDIR_PROMPT: prompt_file '${args.prompt_file}' resolves to a path outside working_directory '${baseDirReal}'.\nRequested: ${args.prompt_file}\nResolved path: ${resolvedReal}\nWorking directory: ${baseDirReal}\nResolved working directory: ${baseDirReal}\nPath policy: ${pathPolicy}\nSuggested: place the prompt file within the working directory or set working_directory to a common ancestor`
+                }],
             isError: true
         };
     }
@@ -626,50 +655,27 @@ ${resolvedPrompt}`;
             }
             // Always write response to output_file.
             if (args.output_file && resolvedOutputPath) {
-                const outputPath = resolvedOutputPath;
-                const relOutput = relative(baseDirReal, outputPath);
-                if (relOutput === '' || relOutput.startsWith('..') || isAbsolute(relOutput)) {
-                    console.warn(`[gemini-core] output_file '${args.output_file}' resolves outside working directory, skipping write.`);
-                }
-                else {
-                    try {
-                        const outputDir = dirname(outputPath);
-                        if (!existsSync(outputDir)) {
-                            const relDir = relative(baseDirReal, outputDir);
-                            if (relDir.startsWith('..') || isAbsolute(relDir)) {
-                                console.warn(`[gemini-core] output_file directory is outside working directory, skipping write.`);
-                            }
-                            else {
-                                mkdirSync(outputDir, { recursive: true });
-                            }
-                        }
-                        let outputDirReal;
-                        try {
-                            outputDirReal = realpathSync(outputDir);
-                        }
-                        catch {
-                            console.warn(`[gemini-core] Failed to resolve output directory, skipping write.`);
-                        }
-                        if (outputDirReal) {
-                            const relDirReal = relative(baseDirReal, outputDirReal);
-                            if (relDirReal.startsWith('..') || isAbsolute(relDirReal)) {
-                                console.warn(`[gemini-core] output_file directory resolves outside working directory, skipping write.`);
-                            }
-                            else {
-                                const safePath = join(outputDirReal, basename(outputPath));
-                                writeFileSync(safePath, response, 'utf-8');
-                            }
-                        }
-                    }
-                    catch (err) {
-                        console.warn(`[gemini-core] Failed to write output file: ${err.message}`);
-                    }
+                const writeResult = safeWriteOutputFile(args.output_file, response, baseDirReal, '[gemini-core]');
+                if (!writeResult.success) {
+                    return {
+                        content: [{
+                                type: 'text',
+                                text: `${fallbackNote}${paramLines}\n\n---\n\n${writeResult.errorMessage}\n\nresolved_working_directory: ${baseDirReal}\npath_policy: ${pathPolicy}`
+                            }],
+                        isError: true
+                    };
                 }
             }
+            // Build success response with metadata for path policy transparency
+            const responseLines = [
+                `${fallbackNote}${paramLines}`,
+                `**Resolved Working Directory:** ${baseDirReal}`,
+                `**Path Policy:** OMC_ALLOW_EXTERNAL_WORKDIR=${process.env.OMC_ALLOW_EXTERNAL_WORKDIR || '0 (enforced)'}`,
+            ];
             return {
                 content: [{
                         type: 'text',
-                        text: `${fallbackNote}${paramLines}`
+                        text: responseLines.join('\n')
                     }]
             };
         }

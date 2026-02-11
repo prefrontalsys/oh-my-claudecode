@@ -11,9 +11,11 @@
 import { spawn } from 'child_process';
 import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'fs';
 import { dirname, resolve, relative, sep, isAbsolute, basename, join } from 'path';
+import { createStdoutCollector, safeWriteOutputFile } from './shared-exec.js';
 import { detectCodexCli } from './cli-detection.js';
 import { getWorktreeRoot } from '../lib/worktree-paths.js';
-import { resolveSystemPrompt, buildPromptWithSystemContext, VALID_AGENT_ROLES } from './prompt-injection.js';
+import { isExternalPromptAllowed } from './mcp-config.js';
+import { resolveSystemPrompt, buildPromptWithSystemContext, wrapUntrustedFileContent, isValidAgentRoleName, VALID_AGENT_ROLES } from './prompt-injection.js';
 import { persistPrompt, persistResponse, getExpectedResponsePath } from './prompt-persistence.js';
 import { writeJobStatus, getStatusFilePath, readJobStatus } from './prompt-persistence.js';
 import type { JobStatus, BackgroundJobMeta } from './prompt-persistence.js';
@@ -55,6 +57,7 @@ export { CODEX_MODEL_FALLBACKS };
 export const CODEX_RECOMMENDED_ROLES = ['architect', 'planner', 'critic', 'analyst', 'code-reviewer', 'security-reviewer', 'tdd-guide'] as const;
 
 export const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB per file
+export const MAX_STDOUT_BYTES = 10 * 1024 * 1024; // 10MB stdout cap
 
 /**
  * Check if Codex JSONL output contains a model-not-found error
@@ -197,11 +200,11 @@ export function executeCodex(prompt: string, model: string, cwd?: string): Promi
       }
     }, CODEX_TIMEOUT);
 
-    let stdout = '';
+    const collector = createStdoutCollector(MAX_STDOUT_BYTES);
     let stderr = '';
 
     child.stdout.on('data', (data: Buffer) => {
-      stdout += data.toString();
+      collector.append(data.toString());
     });
 
     child.stderr.on('data', (data: Buffer) => {
@@ -212,6 +215,7 @@ export function executeCodex(prompt: string, model: string, cwd?: string): Promi
       if (!settled) {
         settled = true;
         clearTimeout(timeoutHandle);
+        const stdout = collector.toString();
         if (code === 0 || stdout.trim()) {
           const retryable = isRetryableError(stdout, stderr);
           if (retryable.isError) {
@@ -357,7 +361,7 @@ export function executeCodexBackground(
       };
       writeJobStatus(initialStatus, workingDirectory);
 
-      let stdout = '';
+      const collector = createStdoutCollector(MAX_STDOUT_BYTES);
       let stderr = '';
       let settled = false;
 
@@ -380,7 +384,9 @@ export function executeCodexBackground(
         }
       }, CODEX_TIMEOUT);
 
-      child.stdout?.on('data', (data: Buffer) => { stdout += data.toString(); });
+      child.stdout?.on('data', (data: Buffer) => {
+        collector.append(data.toString());
+      });
       child.stderr?.on('data', (data: Buffer) => { stderr += data.toString(); });
 
       // Update to running after stdin write
@@ -404,6 +410,7 @@ export function executeCodexBackground(
         settled = true;
         clearTimeout(timeoutHandle);
         spawnedPids.delete(pid);
+        const stdout = collector.toString();
 
         // Check if user killed this job - if so, don't overwrite the killed status
         const currentStatus = readJobStatus('codex', jobMeta.slug, jobMeta.jobId, workingDirectory);
@@ -543,7 +550,7 @@ export function validateAndReadFile(filePath: string, baseDir?: string): string 
     if (stats.size > MAX_FILE_SIZE) {
       return `--- File: ${filePath} --- (File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB, max 5MB)`;
     }
-    return `--- File: ${filePath} ---\n${readFileSync(resolvedReal, 'utf-8')}`;
+    return wrapUntrustedFileContent(filePath, readFileSync(resolvedReal, 'utf-8'));
   } catch {
     return `--- File: ${filePath} --- (Error reading file)`;
   }
@@ -570,6 +577,7 @@ export async function handleAskCodex(args: {
   const config = loadConfig();
   const resolved = resolveExternalModel(config.externalModels, {
     agentRole: args.agent_role,
+    explicitProvider: 'codex',
     explicitModel: args.model,  // user explicitly passed model
   });
 
@@ -582,17 +590,23 @@ export async function handleAskCodex(args: {
   // Derive baseDir from working_directory if provided
   let baseDir = args.working_directory || process.cwd();
   let baseDirReal: string;
+  const pathPolicy = process.env.OMC_ALLOW_EXTERNAL_WORKDIR === '1' ? 'permissive' : 'strict';
   try {
     baseDirReal = realpathSync(baseDir);
   } catch (err) {
+    const errorToken = 'E_WORKDIR_INVALID';
     return {
-      content: [{ type: 'text' as const, text: `working_directory '${args.working_directory}' does not exist or is not accessible: ${(err as Error).message}` }],
+      content: [{ type: 'text' as const, text: `${errorToken}: working_directory '${args.working_directory}' does not exist or is not accessible.
+Error: ${(err as Error).message}
+Resolved working directory: ${baseDir}
+Path policy: ${pathPolicy}
+Suggested: ensure the working directory exists and is accessible` }],
       isError: true
     };
   }
 
   // Security: validate working_directory is within worktree (unless bypass enabled)
-  if (process.env.OMC_ALLOW_EXTERNAL_WORKDIR !== '1') {
+  if (pathPolicy === 'strict') {
     const worktreeRoot = getWorktreeRoot(baseDirReal);
     if (worktreeRoot) {
       let worktreeReal: string;
@@ -605,8 +619,14 @@ export async function handleAskCodex(args: {
       if (worktreeReal) {
         const relToWorktree = relative(worktreeReal, baseDirReal);
         if (relToWorktree.startsWith('..') || isAbsolute(relToWorktree)) {
+          const errorToken = 'E_WORKDIR_INVALID';
           return {
-            content: [{ type: 'text' as const, text: `working_directory '${args.working_directory}' is outside the project worktree (${worktreeRoot}). Set OMC_ALLOW_EXTERNAL_WORKDIR=1 to bypass.` }],
+            content: [{ type: 'text' as const, text: `${errorToken}: working_directory '${args.working_directory}' is outside the project worktree (${worktreeRoot}).
+Requested: ${args.working_directory}
+Resolved working directory: ${baseDirReal}
+Worktree root: ${worktreeRoot}
+Path policy: ${pathPolicy}
+Suggested: use a working_directory within the project worktree, or set OMC_ALLOW_EXTERNAL_WORKDIR=1 to bypass` }],
             isError: true
           };
         }
@@ -615,7 +635,7 @@ export async function handleAskCodex(args: {
   }
 
 
-  // Validate agent_role against the shared allowed agents list
+  // Validate agent_role - must be non-empty and pass character validation
   if (!agent_role || !agent_role.trim()) {
     return {
       content: [{
@@ -625,11 +645,21 @@ export async function handleAskCodex(args: {
       isError: true
     };
   }
-  if (!(VALID_AGENT_ROLES as readonly string[]).includes(agent_role)) {
+  if (!isValidAgentRoleName(agent_role)) {
     return {
       content: [{
         type: 'text' as const,
-        text: `Invalid agent_role: "${agent_role}". Must be one of: ${VALID_AGENT_ROLES.join(', ')}. Recommended for Codex: ${CODEX_RECOMMENDED_ROLES.join(', ')}`
+        text: `Invalid agent_role: "${agent_role}". Role names must contain only lowercase letters, numbers, and hyphens. Recommended for Codex: ${CODEX_RECOMMENDED_ROLES.join(', ')}`
+      }],
+      isError: true
+    };
+  }
+  // Validate agent_role exists in discovered roles (allowlist enforcement)
+  if (!VALID_AGENT_ROLES.includes(agent_role)) {
+    return {
+      content: [{
+        type: 'text' as const,
+        text: `Unknown agent_role: "${agent_role}". Available roles: ${VALID_AGENT_ROLES.join(', ')}. Recommended for Codex: ${CODEX_RECOMMENDED_ROLES.join(', ')}`
       }],
       isError: true
     };
@@ -664,9 +694,15 @@ export async function handleAskCodex(args: {
   const resolvedPath = resolve(baseDir, args.prompt_file);
   const cwdReal = realpathSync(baseDir);
   const relPath = relative(cwdReal, resolvedPath);
-  if (relPath === '..' || relPath.startsWith('..' + sep) || isAbsolute(relPath)) {
+  if (!isExternalPromptAllowed() && (relPath === '..' || relPath.startsWith('..' + sep) || isAbsolute(relPath))) {
+    const errorToken = 'E_PATH_OUTSIDE_WORKDIR_PROMPT';
     return {
-      content: [{ type: 'text' as const, text: `prompt_file '${args.prompt_file}' is outside the working directory.` }],
+      content: [{ type: 'text' as const, text: `${errorToken}: prompt_file '${args.prompt_file}' resolves outside working_directory '${baseDirReal}'.
+Requested: ${args.prompt_file}
+Working directory: ${baseDirReal}
+Resolved working directory: ${baseDirReal}
+Path policy: ${pathPolicy}
+Suggested: place the prompt file within the working directory or set working_directory to a common ancestor` }],
       isError: true
     };
   }
@@ -675,15 +711,27 @@ export async function handleAskCodex(args: {
   try {
     resolvedReal = realpathSync(resolvedPath);
   } catch (err) {
+    const errorToken = 'E_PATH_RESOLUTION_FAILED';
     return {
-      content: [{ type: 'text' as const, text: `Failed to resolve prompt_file '${args.prompt_file}': ${(err as Error).message}` }],
+      content: [{ type: 'text' as const, text: `${errorToken}: Failed to resolve prompt_file '${args.prompt_file}'.
+Error: ${(err as Error).message}
+Resolved working directory: ${baseDirReal}
+Path policy: ${pathPolicy}
+Suggested: ensure the prompt file exists and is accessible` }],
       isError: true
     };
   }
   const relReal = relative(cwdReal, resolvedReal);
-  if (relReal === '..' || relReal.startsWith('..' + sep) || isAbsolute(relReal)) {
+  if (!isExternalPromptAllowed() && (relReal === '..' || relReal.startsWith('..' + sep) || isAbsolute(relReal))) {
+    const errorToken = 'E_PATH_OUTSIDE_WORKDIR_PROMPT';
     return {
-      content: [{ type: 'text' as const, text: `prompt_file '${args.prompt_file}' resolves to a path outside the working directory.` }],
+      content: [{ type: 'text' as const, text: `${errorToken}: prompt_file '${args.prompt_file}' resolves to a path outside working_directory '${baseDirReal}'.
+Requested: ${args.prompt_file}
+Resolved path: ${resolvedReal}
+Working directory: ${baseDirReal}
+Resolved working directory: ${baseDirReal}
+Path policy: ${pathPolicy}
+Suggested: place the prompt file within the working directory or set working_directory to a common ancestor` }],
       isError: true
     };
   }
@@ -801,6 +849,8 @@ ${resolvedPrompt}`;
     context_files?.length ? `**Files:** ${context_files.join(', ')}` : null,
     promptResult ? `**Prompt File:** ${promptResult.filePath}` : null,
     expectedResponsePath ? `**Response File:** ${expectedResponsePath}` : null,
+    `**Resolved Working Directory:** ${baseDirReal}`,
+    `**Path Policy:** ${pathPolicy}`,
   ].filter(Boolean).join('\n');
 
   try {
@@ -826,42 +876,15 @@ ${resolvedPrompt}`;
     // last agent message, which may be a brief acknowledgment. The JSONL-parsed
     // stdout contains ALL agent messages and is always more comprehensive.
     if (args.output_file) {
-      const outputPath = resolve(baseDirReal, args.output_file);
-      const relOutput = relative(baseDirReal, outputPath);
-      if (relOutput.startsWith('..') || isAbsolute(relOutput)) {
-        console.warn(`[codex-core] output_file '${args.output_file}' resolves outside working directory, skipping write.`);
-      } else {
-        try {
-          const outputDir = dirname(outputPath);
-
-          if (!existsSync(outputDir)) {
-            const relDir = relative(baseDirReal, outputDir);
-            if (relDir.startsWith('..') || isAbsolute(relDir)) {
-              console.warn(`[codex-core] output_file directory is outside working directory, skipping write.`);
-            } else {
-              mkdirSync(outputDir, { recursive: true });
-            }
-          }
-
-          let outputDirReal: string | undefined;
-          try {
-            outputDirReal = realpathSync(outputDir);
-          } catch {
-            console.warn(`[codex-core] Failed to resolve output directory, skipping write.`);
-          }
-
-          if (outputDirReal) {
-            const relDirReal = relative(baseDirReal, outputDirReal);
-            if (relDirReal.startsWith('..') || isAbsolute(relDirReal)) {
-              console.warn(`[codex-core] output_file directory resolves outside working directory, skipping write.`);
-            } else {
-              const safePath = join(outputDirReal, basename(outputPath));
-              writeFileSync(safePath, response, 'utf-8');
-            }
-          }
-        } catch (err) {
-          console.warn(`[codex-core] Failed to write output file: ${(err as Error).message}`);
-        }
+      const writeResult = safeWriteOutputFile(args.output_file, response, baseDirReal, '[codex-core]');
+      if (!writeResult.success) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `${paramLines}\n\n---\n\n${writeResult.errorMessage}\n\nresolved_working_directory: ${baseDirReal}\npath_policy: ${pathPolicy}`
+          }],
+          isError: true
+        };
       }
     }
 

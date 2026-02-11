@@ -55,8 +55,14 @@ export function renderContextWithBar(
   const empty = barWidth - filled;
 
   let color: string;
+  let suffix = '';
+
   if (safePercent >= thresholds.contextCritical) {
     color = RED;
+    suffix = ' CRITICAL';
+  } else if (safePercent >= thresholds.contextCompactSuggestion) {
+    color = YELLOW;
+    suffix = ' COMPRESS?';
   } else if (safePercent >= thresholds.contextWarning) {
     color = YELLOW;
   } else {
@@ -64,5 +70,5 @@ export function renderContextWithBar(
   }
 
   const bar = `${color}${'█'.repeat(filled)}${DIM}${'░'.repeat(empty)}${RESET}`;
-  return `ctx:[${bar}]${color}${safePercent}%${RESET}`;
+  return `ctx:[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }

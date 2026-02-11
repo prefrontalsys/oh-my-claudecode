@@ -178,24 +178,61 @@ export declare class LspClient {
      */
     codeActions(filePath: string, range: Range, diagnostics?: Diagnostic[]): Promise<CodeAction[] | null>;
 }
+/** Idle timeout: disconnect LSP clients unused for 5 minutes */
+export declare const IDLE_TIMEOUT_MS: number;
+/** Check for idle clients every 60 seconds */
+export declare const IDLE_CHECK_INTERVAL_MS: number;
 /**
  * Client manager - maintains a pool of LSP clients per workspace/server
+ * with idle eviction to free resources and in-flight request protection.
  */
 declare class LspClientManager {
     private clients;
+    private lastUsed;
+    private inFlightCount;
+    private idleTimer;
+    constructor();
     /**
      * Get or create a client for a file
      */
     getClientForFile(filePath: string): Promise<LspClient | null>;
     /**
+     * Run a function with in-flight tracking for the client serving filePath.
+     * While the function is running, the client is protected from idle eviction.
+     * The lastUsed timestamp is refreshed on both entry and exit.
+     */
+    runWithClientLease<T>(filePath: string, fn: (client: LspClient) => Promise<T>): Promise<T>;
+    /**
      * Find the workspace root for a file
      */
     private findWorkspaceRoot;
     /**
-     * Disconnect all clients
+     * Start periodic idle check
+     */
+    private startIdleCheck;
+    /**
+     * Evict clients that haven't been used within IDLE_TIMEOUT_MS.
+     * Clients with in-flight requests are never evicted.
+     */
+    private evictIdleClients;
+    /**
+     * Disconnect all clients and stop idle checking.
+     * Uses Promise.allSettled so one failing disconnect doesn't block others.
+     * Maps are always cleared regardless of individual disconnect failures.
      */
     disconnectAll(): Promise<void>;
+    /** Expose in-flight count for testing */
+    getInFlightCount(key: string): number;
+    /** Expose client count for testing */
+    get clientCount(): number;
+    /** Trigger idle eviction manually (exposed for testing) */
+    triggerEviction(): void;
 }
 export declare const lspClientManager: LspClientManager;
+/**
+ * Disconnect all LSP clients and free resources.
+ * Exported for use in session-end hooks.
+ */
+export declare function disconnectAll(): Promise<void>;
 export {};
 //# sourceMappingURL=client.d.ts.map

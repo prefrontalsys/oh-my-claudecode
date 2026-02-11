@@ -17,13 +17,28 @@ import { fileURLToPath } from "url";
 // =============================================================================
 /**
  * Get the package root directory (where templates/ lives)
- * Works for both development (src/) and production (dist/)
+ * Works for both development (src/), production (dist/), and CJS bundles (bridge/).
+ * When esbuild bundles to CJS, import.meta is replaced with {} so we
+ * fall back to __dirname which is natively available in CJS.
  */
 function getPackageDir() {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-    // From src/installer/ or dist/installer/, go up two levels to package root
-    return join(__dirname, "..", "..");
+    try {
+        if (import.meta?.url) {
+            const __filename = fileURLToPath(import.meta.url);
+            const __dirname = dirname(__filename);
+            // From src/installer/ or dist/installer/, go up two levels to package root
+            return join(__dirname, "..", "..");
+        }
+    }
+    catch {
+        // import.meta.url unavailable — fall through to CJS path
+    }
+    // CJS bundle path: from bridge/ go up 1 level to package root
+    // eslint-disable-next-line no-undef
+    if (typeof __dirname !== "undefined") {
+        return join(__dirname, "..");
+    }
+    return process.cwd();
 }
 /**
  * Load a hook template file from templates/hooks/

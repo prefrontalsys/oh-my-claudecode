@@ -5,7 +5,7 @@
  * Maintains backward compatibility with definitions.ts exports.
  */
 export * from './types.js';
-export { createAgentToolRestrictions, mergeAgentConfig, buildDelegationTable, buildUseAvoidSection, createEnvContext, getAvailableAgents, buildKeyTriggersSection, validateAgentConfig, deepMerge, loadAgentPrompt } from './utils.js';
+export { createAgentToolRestrictions, mergeAgentConfig, buildDelegationTable, buildUseAvoidSection, createEnvContext, getAvailableAgents, buildKeyTriggersSection, validateAgentConfig, deepMerge, loadAgentPrompt, formatOpenQuestions, OPEN_QUESTIONS_PATH } from './utils.js';
 export { architectAgent, ARCHITECT_PROMPT_METADATA } from './architect.js';
 export { exploreAgent, EXPLORE_PROMPT_METADATA } from './explore.js';
 export { executorAgent, SISYPHUS_JUNIOR_PROMPT_METADATA } from './executor.js';
@@ -25,28 +25,6 @@ export { styleReviewerAgent, qualityReviewerAgent, apiReviewerAgent, performance
 export { dependencyExpertAgent, testEngineerAgent, qualityStrategistAgent } from './definitions.js';
 export { productManagerAgent, uxResearcherAgent, informationArchitectAgent, productAnalystAgent } from './definitions.js';
 export { securityReviewerAgent, buildFixerAgent, codeReviewerAgent, gitMasterAgent } from './definitions.js';
-/** @deprecated Use agent with model parameter instead */
-export declare const architectMediumAgent: undefined;
-/** @deprecated Use agent with model parameter instead */
-export declare const architectLowAgent: undefined;
-/** @deprecated Use agent with model parameter instead */
-export declare const executorHighAgent: undefined;
-/** @deprecated Use agent with model parameter instead */
-export declare const executorLowAgent: undefined;
-/** @deprecated Use agent with model parameter instead */
-export declare const exploreHighAgent: undefined;
-/** @deprecated Use agent with model parameter instead */
-export declare const designerLowAgent: undefined;
-/** @deprecated Use agent with model parameter instead */
-export declare const designerHighAgent: undefined;
-/** @deprecated Use agent with model parameter instead */
-export declare const scientistHighAgent: undefined;
-/** @deprecated Use security-reviewer agent instead */
-export declare const securityReviewerLowAgent: undefined;
-/** @deprecated Use test-engineer agent instead */
-export declare const tddGuideAgent: undefined;
-/** @deprecated Use test-engineer agent instead */
-export declare const tddGuideLowAgent: undefined;
 export { getAgentDefinitions, omcSystemPrompt } from './definitions.js';
 export { coordinatorAgent, ORCHESTRATOR_SISYPHUS_PROMPT_METADATA } from './coordinator-deprecated.js';
 //# sourceMappingURL=index.d.ts.map

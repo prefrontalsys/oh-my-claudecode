@@ -4,7 +4,8 @@
  * Defines types for agent configuration and metadata used in dynamic prompt generation.
  * Ported from oh-my-opencode's agent type system.
  */
-export type ModelType = 'sonnet' | 'opus' | 'haiku' | 'inherit';
+import type { ModelType } from '../shared/types.js';
+export type { ModelType };
 /**
  * Cost tier for agent usage
  * Used to guide when to invoke expensive vs cheap agents

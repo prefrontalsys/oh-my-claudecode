@@ -272,7 +272,7 @@ describe('Agents Element', () => {
       { type: 'verifier', model: 'sonnet', expected: 'v' },
       // Review Lane
       { type: 'style-reviewer', model: 'haiku', expected: 'y' },
-      { type: 'quality-reviewer', model: 'sonnet', expected: 'q' },
+      { type: 'quality-reviewer', model: 'sonnet', expected: 'qr' },
       { type: 'api-reviewer', model: 'sonnet', expected: 'i' },
       { type: 'security-reviewer', model: 'sonnet', expected: 'k' },
       { type: 'performance-reviewer', model: 'sonnet', expected: 'o' },
@@ -286,11 +286,22 @@ describe('Agents Element', () => {
       { type: 'qa-tester', model: 'sonnet', expected: 'q' },
       { type: 'scientist', model: 'sonnet', expected: 's' },
       { type: 'git-master', model: 'sonnet', expected: 'm' },
+      // Product Lane
+      { type: 'product-manager', model: 'sonnet', expected: 'pm' },
+      { type: 'ux-researcher', model: 'sonnet', expected: 'u' },
+      { type: 'information-architect', model: 'sonnet', expected: 'ia' },
+      { type: 'product-analyst', model: 'sonnet', expected: 'a' },
+      { type: 'quality-strategist', model: 'sonnet', expected: 'qs' },
       // Coordination
       { type: 'critic', model: 'opus', expected: 'C' },
       { type: 'analyst', model: 'opus', expected: 'T' },
       { type: 'planner', model: 'opus', expected: 'P' },
       { type: 'vision', model: 'sonnet', expected: 'v' },
+      // Multi-char codes with opus tier (first char uppercase)
+      { type: 'quality-reviewer', model: 'opus', expected: 'Qr' },
+      { type: 'quality-strategist', model: 'opus', expected: 'Qs' },
+      { type: 'product-manager', model: 'opus', expected: 'Pm' },
+      { type: 'information-architect', model: 'opus', expected: 'Ia' },
       // Backward Compatibility
       { type: 'researcher', model: 'sonnet', expected: 'r' },
     ];

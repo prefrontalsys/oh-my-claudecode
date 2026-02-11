@@ -1,35 +1,15 @@
 ---
-description: Alias for /plan --consensus
-aliases: [rp, planloop]
+description: "Alias for /plan --consensus"
 ---
 
-# ralplan
+This command is deprecated. Invoke the skill instead:
 
-**Alias for:** `/plan --consensus`
-
-Iterative planning with Planner, Architect, and Critic until consensus is reached.
-
-## Usage
-
-```bash
-/ralplan [task description]
+```
+/oh-my-claudecode:ralplan
 ```
 
-This is equivalent to:
+Pass any arguments after the skill name. For example:
 
-```bash
-/plan --consensus [task description]
 ```
-
-## Description
-
-The ralplan workflow:
-1. Planner creates initial plan
-2. Architect reviews for technical feasibility
-3. Critic evaluates for completeness and quality
-4. Iterate until all three agents reach consensus
-
-## See Also
-
-- `/plan` - Strategic planning with optional interview workflow
-- `/review` - Review a plan with Critic
+/oh-my-claudecode:ralplan <your arguments here>
+```

@@ -52,10 +52,6 @@ export declare function pruneOldStateFiles(directory: string, maxAgeDays?: numbe
  */
 export declare function cleanupOrphanedState(directory: string): number;
 /**
- * Run VACUUM on swarm SQLite database if it exists
- */
-export declare function vacuumSwarmDb(directory: string): boolean;
-/**
  * Process setup maintenance trigger
  */
 export declare function processSetupMaintenance(input: SetupInput): Promise<HookOutput>;

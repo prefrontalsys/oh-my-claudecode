@@ -15,6 +15,14 @@ function truncate(str, maxWidth) {
     return truncateToWidth(str, maxWidth);
 }
 /**
+ * Extract the display name from a skill name.
+ * For namespaced skills (e.g., "oh-my-claudecode:plan"), returns only the last segment ("plan").
+ * For non-namespaced skills, returns the name unchanged.
+ */
+function getSkillDisplayName(skillName) {
+    return skillName.split(':').pop() || skillName;
+}
+/**
  * Check if a skill name corresponds to an active mode.
  */
 function isActiveMode(skillName, ultrawork, ralph) {
@@ -48,7 +56,8 @@ export function renderSkills(ultrawork, ralph, lastSkill) {
     // Last skill (if different from active mode)
     if (lastSkill && !isActiveMode(lastSkill.name, ultrawork, ralph)) {
         const argsDisplay = lastSkill.args ? `(${truncate(lastSkill.args, 15)})` : '';
-        parts.push(cyan(`skill:${lastSkill.name}${argsDisplay}`));
+        const displayName = getSkillDisplayName(lastSkill.name);
+        parts.push(cyan(`skill:${displayName}${argsDisplay}`));
     }
     return parts.length > 0 ? parts.join(' ') : null;
 }
@@ -59,7 +68,8 @@ export function renderLastSkill(lastSkill) {
     if (!lastSkill)
         return null;
     const argsDisplay = lastSkill.args ? `(${truncate(lastSkill.args, 15)})` : '';
-    return cyan(`skill:${lastSkill.name}${argsDisplay}`);
+    const displayName = getSkillDisplayName(lastSkill.name);
+    return cyan(`skill:${displayName}${argsDisplay}`);
 }
 /**
  * Render skill with reinforcement count (for debugging).

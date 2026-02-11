@@ -9,6 +9,7 @@
  * - run: Start an interactive session
  * - init: Initialize configuration in current directory
  * - config: Show or edit configuration
+ * - setup: Sync all OMC components (hooks, agents, skills)
  */
 
 import { Command } from 'commander';
@@ -63,17 +64,11 @@ import {
   teleportRemoveCommand
 } from './commands/teleport.js';
 
+import { getRuntimePackageVersion } from '../lib/version.js';
+
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Try to load package.json for version
-let version = '1.0.0';
-try {
-  const pkgPath = join(__dirname, '../../package.json');
-  const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-  version = pkg.version;
-} catch {
-  // Use default version
-}
+const version = getRuntimePackageVersion();
 
 const program = new Command();
 
@@ -761,11 +756,13 @@ program
   .option('-c, --check', 'Only check for updates, do not install')
   .option('-f, --force', 'Force reinstall even if up to date')
   .option('-q, --quiet', 'Suppress output except for errors')
+  .option('--standalone', 'Force npm update even in plugin context')
   .addHelpText('after', `
 Examples:
   $ omc update                   Check and install updates
   $ omc update --check           Only check, don't install
-  $ omc update --force           Force reinstall`)
+  $ omc update --force           Force reinstall
+  $ omc update --standalone      Force npm update in plugin context`)
   .action(async (options) => {
     if (!options.quiet) {
       console.log(chalk.blue('Oh-My-ClaudeCode Update\n'));
@@ -811,7 +808,7 @@ Examples:
         console.log(chalk.blue('\nStarting update...\n'));
       }
 
-      const result = await performUpdate({ verbose: !options.quiet });
+      const result = await performUpdate({ verbose: !options.quiet, standalone: options.standalone });
 
       if (result.success) {
         if (!options.quiet) {
@@ -1139,6 +1136,85 @@ Examples:
   .action(async (options) => {
     const exitCode = await doctorConflictsCommand(options);
     process.exit(exitCode);
+  });
+
+/**
+ * Setup command - Official CLI entry point for omc-setup
+ *
+ * User-friendly command that syncs all OMC components:
+ * - Installs/updates hooks, agents, and skills
+ * - Reconciles runtime state after updates
+ * - Shows clear summary of what was installed/updated
+ */
+program
+  .command('setup')
+  .description('Run OMC setup to sync all components (hooks, agents, skills)')
+  .option('-f, --force', 'Force reinstall even if already up to date')
+  .option('-q, --quiet', 'Suppress output except for errors')
+  .option('--skip-hooks', 'Skip hook installation')
+  .option('--force-hooks', 'Force reinstall hooks even if unchanged')
+  .addHelpText('after', `
+Examples:
+  $ omc setup                     Sync all OMC components
+  $ omc setup --force             Force reinstall everything
+  $ omc setup --quiet             Silent setup for scripts
+  $ omc setup --skip-hooks        Install without hooks
+  $ omc setup --force-hooks       Force reinstall hooks`)
+  .action(async (options) => {
+    if (!options.quiet) {
+      console.log(chalk.blue('Oh-My-ClaudeCode Setup\n'));
+    }
+
+    // Step 1: Run installation (which handles hooks, agents, skills)
+    if (!options.quiet) {
+      console.log(chalk.gray('Syncing OMC components...'));
+    }
+
+    const result = installSisyphus({
+      force: !!options.force,
+      verbose: !options.quiet,
+      skipClaudeCheck: true,
+      forceHooks: !!options.forceHooks,
+    });
+
+    if (!result.success) {
+      console.error(chalk.red(`Setup failed: ${result.message}`));
+      if (result.errors.length > 0) {
+        result.errors.forEach(err => console.error(chalk.red(`  - ${err}`)));
+      }
+      process.exit(1);
+    }
+
+    // Step 2: Show summary
+    if (!options.quiet) {
+      console.log('');
+      console.log(chalk.green('Setup complete!'));
+      console.log('');
+
+      if (result.installedAgents.length > 0) {
+        console.log(chalk.gray(`  Agents:   ${result.installedAgents.length} synced`));
+      }
+      if (result.installedCommands.length > 0) {
+        console.log(chalk.gray(`  Commands: ${result.installedCommands.length} synced`));
+      }
+      if (result.installedSkills.length > 0) {
+        console.log(chalk.gray(`  Skills:   ${result.installedSkills.length} synced`));
+      }
+      if (result.hooksConfigured) {
+        console.log(chalk.gray('  Hooks:    configured'));
+      }
+      if (result.hookConflicts.length > 0) {
+        console.log('');
+        console.log(chalk.yellow('  Hook conflicts detected:'));
+        result.hookConflicts.forEach(c => {
+          console.log(chalk.yellow(`    - ${c.eventType}: ${c.existingCommand}`));
+        });
+      }
+
+      console.log('');
+      console.log(chalk.gray(`Version: ${version}`));
+      console.log(chalk.gray('Start Claude Code and use /oh-my-claudecode:omc-setup for interactive setup.'));
+    }
   });
 
 /**

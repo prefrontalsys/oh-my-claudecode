@@ -127,6 +127,18 @@ describe('AutopilotCancel', () => {
             expect(state?.active).toBe(false);
             expect(state?.originalIdea).toBe('test idea');
         });
+        it('should not clear other session ralph/ultraqa state when sessionId provided', () => {
+            const sessionId = 'session-a';
+            initAutopilot(testDir, 'test idea', sessionId);
+            vi.mocked(ralphLoop.readRalphState).mockReturnValueOnce(null);
+            vi.mocked(ultraqaLoop.readUltraQAState).mockReturnValueOnce(null);
+            cancelAutopilot(testDir, sessionId);
+            expect(ralphLoop.readRalphState).toHaveBeenCalledWith(testDir, sessionId);
+            expect(ultraqaLoop.readUltraQAState).toHaveBeenCalledWith(testDir, sessionId);
+            expect(ralphLoop.clearRalphState).not.toHaveBeenCalled();
+            expect(ralphLoop.clearLinkedUltraworkState).not.toHaveBeenCalled();
+            expect(ultraqaLoop.clearUltraQAState).not.toHaveBeenCalled();
+        });
     });
     describe('clearAutopilot', () => {
         it('should return success when no state exists', () => {
@@ -188,6 +200,18 @@ describe('AutopilotCancel', () => {
             expect(ultraqaLoop.clearUltraQAState).toHaveBeenCalledWith(testDir);
             const state = readAutopilotState(testDir);
             expect(state).toBeNull();
+        });
+        it('should not clear other session ralph/ultraqa state when sessionId provided', () => {
+            const sessionId = 'session-a';
+            initAutopilot(testDir, 'test idea', sessionId);
+            vi.mocked(ralphLoop.readRalphState).mockReturnValueOnce(null);
+            vi.mocked(ultraqaLoop.readUltraQAState).mockReturnValueOnce(null);
+            clearAutopilot(testDir, sessionId);
+            expect(ralphLoop.readRalphState).toHaveBeenCalledWith(testDir, sessionId);
+            expect(ultraqaLoop.readUltraQAState).toHaveBeenCalledWith(testDir, sessionId);
+            expect(ralphLoop.clearRalphState).not.toHaveBeenCalled();
+            expect(ralphLoop.clearLinkedUltraworkState).not.toHaveBeenCalled();
+            expect(ultraqaLoop.clearUltraQAState).not.toHaveBeenCalled();
         });
     });
     describe('canResumeAutopilot', () => {

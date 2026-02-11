@@ -25,6 +25,7 @@ async function main() {
     // Always continue on error
     console.log(JSON.stringify({
       continue: true,
+      suppressOutput: true,
     }));
   }
 }

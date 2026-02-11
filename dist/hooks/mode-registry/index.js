@@ -47,6 +47,12 @@ const MODE_CONFIGS = {
         stateFile: 'pipeline-state.json',
         activeProperty: 'active'
     },
+    team: {
+        name: 'Team',
+        stateFile: 'team-state.json',
+        activeProperty: 'active',
+        hasGlobalState: false
+    },
     ralph: {
         name: 'Ralph',
         stateFile: 'ralph-state.json',

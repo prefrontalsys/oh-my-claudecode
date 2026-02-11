@@ -21,6 +21,9 @@ export {
   createRalphLoopHook,
   isUltraQAActive,
 
+  // Team coordination
+  getTeamPhaseDirective,
+
   // PRD integration
   hasPrd,
   getPrdCompletionStatus,

@@ -23,7 +23,7 @@ export declare const VERSION_FILE: string;
  */
 export declare const CORE_COMMANDS: string[];
 /** Current version */
-export declare const VERSION = "4.1.5";
+export declare const VERSION: string;
 /** Installation result */
 export interface InstallResult {
     success: boolean;

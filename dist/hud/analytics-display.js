@@ -165,12 +165,14 @@ export function renderSessionHealthAnalytics(sessionHealth) {
 /**
  * Render budget warning if cost exceeds thresholds
  */
-export function renderBudgetWarning(sessionHealth) {
+export function renderBudgetWarning(sessionHealth, thresholds) {
     const cost = sessionHealth.sessionCost ?? 0;
-    if (cost > 5.0) {
-        return `⚠️  BUDGET ALERT: Session cost ${cost.toFixed(2)} exceeds $5.00`;
+    const criticalThreshold = thresholds?.budgetCritical ?? 5.0;
+    const warningThreshold = thresholds?.budgetWarning ?? 2.0;
+    if (cost > criticalThreshold) {
+        return `⚠️  BUDGET ALERT: Session cost ${cost.toFixed(2)} exceeds $${criticalThreshold.toFixed(2)}`;
     }
-    else if (cost > 2.0) {
+    else if (cost > warningThreshold) {
         return `⚡ Budget notice: Session cost ${cost.toFixed(2)} approaching limit`;
     }
     return '';

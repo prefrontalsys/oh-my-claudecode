@@ -23,6 +23,8 @@ export * from './transcript-token-extractor.js';
 // Kept for backward compatibility but no longer used by CLI
 export * from './backfill-dedup.js';
 export * from './backfill-engine.js';
+// Session catalog (derives sessions from token-tracking.jsonl)
+export * from './session-catalog.js';
 // Tokscale integration (replaces backfill)
 export * from './tokscale-adapter.js';
 //# sourceMappingURL=index.js.map

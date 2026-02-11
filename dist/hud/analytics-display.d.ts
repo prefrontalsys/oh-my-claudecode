@@ -52,7 +52,10 @@ export declare function renderSessionHealthAnalytics(sessionHealth: SessionHealt
 /**
  * Render budget warning if cost exceeds thresholds
  */
-export declare function renderBudgetWarning(sessionHealth: SessionHealth): string;
+export declare function renderBudgetWarning(sessionHealth: SessionHealth, thresholds?: {
+    budgetWarning: number;
+    budgetCritical: number;
+}): string;
 /**
  * Render cache efficiency meter
  */

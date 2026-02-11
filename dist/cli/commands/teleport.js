@@ -5,10 +5,11 @@
  * Default worktree location: ~/Workspace/omc-worktrees/
  */
 import chalk from 'chalk';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { existsSync, mkdirSync, rmSync, readdirSync, statSync } from 'fs';
 import { homedir } from 'os';
 import { join, basename, isAbsolute, relative } from 'path';
+import { parseRemoteUrl, getProvider } from '../../providers/index.js';
 // Default worktree root directory
 const DEFAULT_WORKTREE_ROOT = join(homedir(), 'Workspace', 'omc-worktrees');
 /**
@@ -16,31 +17,116 @@ const DEFAULT_WORKTREE_ROOT = join(homedir(), 'Workspace', 'omc-worktrees');
  * Supports: omc#123, owner/repo#123, #123, URLs, feature names
  */
 function parseRef(ref) {
-    // GitHub PR URL
-    const prUrlMatch = ref.match(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/);
-    if (prUrlMatch) {
+    // GitHub PR URL: github.com/owner/repo/pull/N
+    const ghPrUrlMatch = ref.match(/^https?:\/\/[^/]*github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)(?:[?#].*)?$/);
+    if (ghPrUrlMatch) {
         return {
             type: 'pr',
-            owner: prUrlMatch[1],
-            repo: prUrlMatch[2],
-            number: parseInt(prUrlMatch[3], 10),
+            owner: ghPrUrlMatch[1],
+            repo: ghPrUrlMatch[2],
+            number: parseInt(ghPrUrlMatch[3], 10),
+            provider: 'github',
         };
     }
-    // GitHub Issue URL
-    const issueUrlMatch = ref.match(/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)/);
-    if (issueUrlMatch) {
+    // GitHub Issue URL: github.com/owner/repo/issues/N
+    const ghIssueUrlMatch = ref.match(/^https?:\/\/[^/]*github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)(?:[?#].*)?$/);
+    if (ghIssueUrlMatch) {
         return {
             type: 'issue',
-            owner: issueUrlMatch[1],
-            repo: issueUrlMatch[2],
-            number: parseInt(issueUrlMatch[3], 10),
+            owner: ghIssueUrlMatch[1],
+            repo: ghIssueUrlMatch[2],
+            number: parseInt(ghIssueUrlMatch[3], 10),
+            provider: 'github',
         };
     }
-    // owner/repo#123 format
-    const fullRefMatch = ref.match(/^([^/]+)\/([^#]+)#(\d+)$/);
+    // GitLab MR URL: gitlab.*/namespace/-/merge_requests/N (supports nested groups and self-hosted)
+    const glMrUrlMatch = ref.match(/^https?:\/\/[^/]*gitlab[^/]*\/(.+)\/-\/merge_requests\/(\d+)(?:[?#].*)?$/);
+    if (glMrUrlMatch) {
+        const namespaceParts = glMrUrlMatch[1].split('/');
+        const repo = namespaceParts.pop();
+        const owner = namespaceParts.join('/');
+        return {
+            type: 'pr',
+            owner,
+            repo,
+            number: parseInt(glMrUrlMatch[2], 10),
+            provider: 'gitlab',
+        };
+    }
+    // GitLab Issue URL: gitlab.*/namespace/-/issues/N (supports nested groups and self-hosted)
+    const glIssueUrlMatch = ref.match(/^https?:\/\/[^/]*gitlab[^/]*\/(.+)\/-\/issues\/(\d+)(?:[?#].*)?$/);
+    if (glIssueUrlMatch) {
+        const namespaceParts = glIssueUrlMatch[1].split('/');
+        const repo = namespaceParts.pop();
+        const owner = namespaceParts.join('/');
+        return {
+            type: 'issue',
+            owner,
+            repo,
+            number: parseInt(glIssueUrlMatch[2], 10),
+            provider: 'gitlab',
+        };
+    }
+    // Bitbucket PR URL: bitbucket.org/workspace/repo/pull-requests/N
+    const bbPrUrlMatch = ref.match(/^https?:\/\/[^/]*bitbucket\.org\/([^/]+)\/([^/]+)\/pull-requests\/(\d+)(?:[?#].*)?$/);
+    if (bbPrUrlMatch) {
+        return {
+            type: 'pr',
+            owner: bbPrUrlMatch[1],
+            repo: bbPrUrlMatch[2],
+            number: parseInt(bbPrUrlMatch[3], 10),
+            provider: 'bitbucket',
+        };
+    }
+    // Bitbucket Issue URL: bitbucket.org/workspace/repo/issues/N
+    const bbIssueUrlMatch = ref.match(/^https?:\/\/[^/]*bitbucket\.org\/([^/]+)\/([^/]+)\/issues\/(\d+)(?:[?#].*)?$/);
+    if (bbIssueUrlMatch) {
+        return {
+            type: 'issue',
+            owner: bbIssueUrlMatch[1],
+            repo: bbIssueUrlMatch[2],
+            number: parseInt(bbIssueUrlMatch[3], 10),
+            provider: 'bitbucket',
+        };
+    }
+    // Azure DevOps PR URL: dev.azure.com/org/project/_git/repo/pullrequest/N
+    const azPrUrlMatch = ref.match(/^https?:\/\/[^/]*dev\.azure\.com\/([^/]+)\/([^/]+)\/_git\/([^/]+)\/pullrequest\/(\d+)(?:[?#].*)?$/);
+    if (azPrUrlMatch) {
+        return {
+            type: 'pr',
+            owner: `${azPrUrlMatch[1]}/${azPrUrlMatch[2]}`,
+            repo: azPrUrlMatch[3],
+            number: parseInt(azPrUrlMatch[4], 10),
+            provider: 'azure-devops',
+        };
+    }
+    // Azure DevOps legacy: https://{org}.visualstudio.com/{project}/_git/{repo}/pullrequest/{id}
+    const azureLegacyPrMatch = ref.match(/^https?:\/\/([^.]+)\.visualstudio\.com\/([^/]+)\/_git\/([^/]+)\/pullrequest\/(\d+)/i);
+    if (azureLegacyPrMatch) {
+        return {
+            type: 'pr',
+            provider: 'azure-devops',
+            owner: `${azureLegacyPrMatch[1]}/${azureLegacyPrMatch[2]}`,
+            repo: azureLegacyPrMatch[3],
+            number: parseInt(azureLegacyPrMatch[4], 10),
+        };
+    }
+    // owner/repo!123 format (GitLab MR shorthand, supports nested groups)
+    const gitlabShorthand = ref.match(/^(.+?)\/([^!/]+)!(\d+)$/);
+    if (gitlabShorthand) {
+        return {
+            type: 'pr',
+            owner: gitlabShorthand[1],
+            repo: gitlabShorthand[2],
+            number: parseInt(gitlabShorthand[3], 10),
+            provider: 'gitlab',
+        };
+    }
+    // owner/repo#123 format (provider-agnostic, supports nested groups)
+    const fullRefMatch = ref.match(/^(.+)\/([^/#]+)#(\d+)$/);
     if (fullRefMatch) {
         return {
-            type: 'issue', // Will be refined by gh CLI
+            type: 'issue', // Will be refined by provider CLI
             owner: fullRefMatch[1],
             repo: fullRefMatch[2],
             number: parseInt(fullRefMatch[3], 10),
@@ -86,16 +172,9 @@ function getCurrentRepo() {
     try {
         const root = execSync('git rev-parse --show-toplevel', { encoding: 'utf-8' }).trim();
         const remoteUrl = execSync('git remote get-url origin', { encoding: 'utf-8' }).trim();
-        // Parse remote URL (SSH or HTTPS)
-        const sshMatch = remoteUrl.match(/git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/);
-        const httpsMatch = remoteUrl.match(/github\.com\/([^/]+)\/(.+?)(?:\.git)?$/);
-        const match = sshMatch || httpsMatch;
-        if (match) {
-            return {
-                owner: match[1],
-                repo: match[2].replace(/\.git$/, ''),
-                root,
-            };
+        const parsed = parseRemoteUrl(remoteUrl);
+        if (parsed) {
+            return { owner: parsed.owner, repo: parsed.repo, root, provider: parsed.provider };
         }
     }
     catch {
@@ -104,24 +183,15 @@ function getCurrentRepo() {
     return null;
 }
 /**
- * Fetch issue/PR info from GitHub
+ * Fetch issue/PR info via provider abstraction
  */
-function fetchGitHubInfo(type, number, owner, repo) {
-    try {
-        const repoArg = owner && repo ? `--repo ${owner}/${repo}` : '';
-        const cmd = type === 'pr'
-            ? `gh pr view ${number} ${repoArg} --json title,headRefName`
-            : `gh issue view ${number} ${repoArg} --json title`;
-        const result = execSync(cmd, { encoding: 'utf-8' });
-        const data = JSON.parse(result);
-        return {
-            title: data.title,
-            branch: data.headRefName,
-        };
+function fetchProviderInfo(type, number, provider, owner, repo) {
+    if (type === 'pr') {
+        const pr = provider.viewPR(number, owner, repo);
+        return pr ? { title: pr.title, branch: pr.headBranch } : null;
     }
-    catch {
-        return null;
-    }
+    const issue = provider.viewIssue(number, owner, repo);
+    return issue ? { title: issue.title } : null;
 }
 /**
  * Create a git worktree
@@ -182,6 +252,9 @@ export async function teleportCommand(ref, options) {
     }
     const { owner, repo, root: repoRoot } = currentRepo;
     const repoName = basename(repoRoot);
+    // Use provider from parsed ref if available, otherwise fall back to current repo
+    const effectiveProviderName = parsed.provider || currentRepo.provider;
+    const provider = getProvider(effectiveProviderName);
     let branchName;
     let worktreeDirName;
     let title;
@@ -206,15 +279,23 @@ export async function teleportCommand(ref, options) {
             }
             return { success: false, error };
         }
+        if (!provider) {
+            const error = `Could not fetch info for #${parsed.number}. Could not detect git provider.`;
+            if (!options.json) {
+                console.error(chalk.red(error));
+            }
+            return { success: false, error };
+        }
         // Try to detect if it's a PR or issue
-        const prInfo = fetchGitHubInfo('pr', parsed.number, resolvedOwner, resolvedRepo);
+        const prInfo = fetchProviderInfo('pr', parsed.number, provider, resolvedOwner, resolvedRepo);
         const issueInfo = !prInfo
-            ? fetchGitHubInfo('issue', parsed.number, resolvedOwner, resolvedRepo)
+            ? fetchProviderInfo('issue', parsed.number, provider, resolvedOwner, resolvedRepo)
             : null;
         const info = prInfo || issueInfo;
         const isPR = !!prInfo;
         if (!info) {
-            const error = `Could not fetch info for #${parsed.number}. Make sure gh CLI is installed and authenticated.`;
+            const cli = provider.getRequiredCLI();
+            const error = `Could not fetch info for #${parsed.number} from ${provider.displayName}. ${cli ? `Make sure ${cli} CLI is installed and authenticated.` : 'Check your authentication credentials and network connection.'}`;
             if (!options.json) {
                 console.error(chalk.red(error));
             }
@@ -229,12 +310,27 @@ export async function teleportCommand(ref, options) {
             if (!options.json) {
                 console.log(chalk.blue(`Creating PR review worktree: #${parsed.number} - ${title}`));
             }
-            // Fetch the PR branch
-            try {
-                execSync(`git fetch origin pull/${parsed.number}/head:${branchName}`, { cwd: repoRoot, stdio: 'pipe' });
+            // Fetch the PR branch using provider-specific refspec or head branch
+            if (provider.prRefspec) {
+                try {
+                    const refspec = provider.prRefspec
+                        .replace('{number}', String(parsed.number))
+                        .replace('{branch}', branchName);
+                    execFileSync('git', ['fetch', 'origin', refspec], { cwd: repoRoot, stdio: ['pipe', 'pipe', 'pipe'], timeout: 30000 });
+                }
+                catch {
+                    // Branch might already exist
+                }
             }
-            catch {
-                // Branch might already exist
+            else if (info.branch) {
+                // For providers without prRefspec (Bitbucket, Azure, Gitea),
+                // fetch the PR's head branch from origin
+                try {
+                    execFileSync('git', ['fetch', 'origin', `${info.branch}:${branchName}`], { cwd: repoRoot, stdio: ['pipe', 'pipe', 'pipe'], timeout: 30000 });
+                }
+                catch {
+                    // Branch might already exist locally
+                }
             }
         }
         else {

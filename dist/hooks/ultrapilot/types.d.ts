@@ -4,7 +4,7 @@
  * Type definitions for the ultrapilot coordinator - manages parallel worker spawning
  * and coordination with file ownership to avoid conflicts.
  *
- * Ultrapilot decomposes tasks into parallelizable subtasks, spawns workers (max 5),
+ * Ultrapilot decomposes tasks into parallelizable subtasks, spawns workers (max 20),
  * tracks progress, and integrates results while managing shared file access.
  */
 /**

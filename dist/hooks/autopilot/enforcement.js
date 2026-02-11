@@ -204,7 +204,7 @@ IMPORTANT: When the phase is complete, output the appropriate signal:
 - Planning: PLANNING_COMPLETE
 - Execution: EXECUTION_COMPLETE
 - QA: QA_COMPLETE
-- Validation: AUTOPILOT_COMPLETE
+- Validation: VALIDATION_COMPLETE
 
 </autopilot-continuation>
 

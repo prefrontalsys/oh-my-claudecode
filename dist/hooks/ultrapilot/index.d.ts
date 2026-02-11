@@ -18,7 +18,7 @@ export type { DecomposedTask, DecompositionResult, DecompositionOptions, AgentTy
  * @param config - Configuration options
  * @returns Initialized ultrapilot state
  */
-export declare function startUltrapilot(cwd: string, task: string, config?: Partial<UltrapilotConfig>): Promise<UltrapilotState>;
+export declare function startUltrapilot(cwd: string, task: string, config?: Partial<UltrapilotConfig>, sessionId?: string): Promise<UltrapilotState>;
 /**
  * Decompose a task into parallelizable subtasks
  *

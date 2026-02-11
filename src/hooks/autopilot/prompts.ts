@@ -57,6 +57,17 @@ Output as structured markdown."
 )
 \`\`\`
 
+### Step 2.5: Persist Open Questions
+
+If the Analyst output includes a \`### Open Questions\` section, extract those items and save them to \`.omc/plans/open-questions.md\` using the standard format:
+
+\`\`\`
+## [Topic] - [Date]
+- [ ] [Question] — [Why it matters]
+\`\`\`
+
+The Analyst is read-only and cannot write files, so you must persist its open questions on its behalf.
+
 ### Step 3: Save Combined Spec
 
 Combine Analyst requirements + Architect technical spec into a single document.

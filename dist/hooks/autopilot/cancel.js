@@ -28,19 +28,38 @@ export function cancelAutopilot(directory, sessionId) {
     // Track what we cleaned up
     const cleanedUp = [];
     // Clean up any active Ralph state
-    const ralphState = readRalphState(directory);
+    const ralphState = sessionId
+        ? readRalphState(directory, sessionId)
+        : readRalphState(directory);
     if (ralphState?.active) {
         if (ralphState.linked_ultrawork) {
-            clearLinkedUltraworkState(directory);
+            if (sessionId) {
+                clearLinkedUltraworkState(directory, sessionId);
+            }
+            else {
+                clearLinkedUltraworkState(directory);
+            }
             cleanedUp.push('ultrawork');
         }
-        clearRalphState(directory);
+        if (sessionId) {
+            clearRalphState(directory, sessionId);
+        }
+        else {
+            clearRalphState(directory);
+        }
         cleanedUp.push('ralph');
     }
     // Clean up any active UltraQA state
-    const ultraqaState = readUltraQAState(directory);
+    const ultraqaState = sessionId
+        ? readUltraQAState(directory, sessionId)
+        : readUltraQAState(directory);
     if (ultraqaState?.active) {
-        clearUltraQAState(directory);
+        if (sessionId) {
+            clearUltraQAState(directory, sessionId);
+        }
+        else {
+            clearUltraQAState(directory);
+        }
         cleanedUp.push('ultraqa');
     }
     // Mark autopilot as inactive but preserve state for resume
@@ -67,16 +86,35 @@ export function clearAutopilot(directory, sessionId) {
         };
     }
     // Clean up all related state
-    const ralphState = readRalphState(directory);
+    const ralphState = sessionId
+        ? readRalphState(directory, sessionId)
+        : readRalphState(directory);
     if (ralphState) {
         if (ralphState.linked_ultrawork) {
-            clearLinkedUltraworkState(directory);
+            if (sessionId) {
+                clearLinkedUltraworkState(directory, sessionId);
+            }
+            else {
+                clearLinkedUltraworkState(directory);
+            }
         }
-        clearRalphState(directory);
+        if (sessionId) {
+            clearRalphState(directory, sessionId);
+        }
+        else {
+            clearRalphState(directory);
+        }
     }
-    const ultraqaState = readUltraQAState(directory);
+    const ultraqaState = sessionId
+        ? readUltraQAState(directory, sessionId)
+        : readUltraQAState(directory);
     if (ultraqaState) {
-        clearUltraQAState(directory);
+        if (sessionId) {
+            clearUltraQAState(directory, sessionId);
+        }
+        else {
+            clearUltraQAState(directory);
+        }
     }
     // Clear autopilot state completely
     clearAutopilotState(directory, sessionId);

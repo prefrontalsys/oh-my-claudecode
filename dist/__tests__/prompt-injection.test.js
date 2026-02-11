@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { resolveSystemPrompt, buildPromptWithSystemContext, VALID_AGENT_ROLES } from '../mcp/prompt-injection.js';
+import { resolveSystemPrompt, buildPromptWithSystemContext, VALID_AGENT_ROLES, getValidAgentRoles, isValidAgentRoleName } from '../mcp/prompt-injection.js';
 describe('prompt-injection', () => {
     describe('VALID_AGENT_ROLES', () => {
         test('contains expected agent roles', () => {
@@ -12,7 +12,47 @@ describe('prompt-injection', () => {
         test('is immutable (readonly array)', () => {
             // TypeScript enforces this at compile time, but we can verify the array exists
             expect(Array.isArray(VALID_AGENT_ROLES)).toBe(true);
-            expect(VALID_AGENT_ROLES.length).toBeGreaterThan(20);
+            expect(VALID_AGENT_ROLES.length).toBeGreaterThanOrEqual(28);
+        });
+        test('includes all agents with .md files', () => {
+            // Verify known agents that have .md files are included
+            expect(VALID_AGENT_ROLES).toContain('debugger');
+            expect(VALID_AGENT_ROLES).toContain('verifier');
+            expect(VALID_AGENT_ROLES).toContain('product-manager');
+            expect(VALID_AGENT_ROLES).toContain('dependency-expert');
+            expect(VALID_AGENT_ROLES).toContain('quality-reviewer');
+            expect(VALID_AGENT_ROLES).toContain('api-reviewer');
+        });
+    });
+    describe('getValidAgentRoles', () => {
+        test('returns array of role names from agents/*.md files', () => {
+            const roles = getValidAgentRoles();
+            expect(Array.isArray(roles)).toBe(true);
+            expect(roles.length).toBeGreaterThanOrEqual(28);
+            // Should be sorted
+            expect(roles).toEqual([...roles].sort());
+        });
+        test('returns cached result on subsequent calls', () => {
+            const first = getValidAgentRoles();
+            const second = getValidAgentRoles();
+            expect(first).toBe(second); // Same reference due to caching
+        });
+    });
+    describe('isValidAgentRoleName', () => {
+        test('returns true for valid role names', () => {
+            expect(isValidAgentRoleName('architect')).toBe(true);
+            expect(isValidAgentRoleName('executor-high')).toBe(true);
+            expect(isValidAgentRoleName('product-manager')).toBe(true);
+            expect(isValidAgentRoleName('code-reviewer')).toBe(true);
+            expect(isValidAgentRoleName('test123')).toBe(true);
+        });
+        test('returns false for invalid role names', () => {
+            expect(isValidAgentRoleName('')).toBe(false);
+            expect(isValidAgentRoleName('architect_medium')).toBe(false); // underscore
+            expect(isValidAgentRoleName('architect.medium')).toBe(false); // dot
+            expect(isValidAgentRoleName('architect medium')).toBe(false); // space
+            expect(isValidAgentRoleName('../../etc/passwd')).toBe(false); // path traversal
+            expect(isValidAgentRoleName('architect;rm -rf')).toBe(false); // special chars
         });
     });
     describe('resolveSystemPrompt', () => {
@@ -121,7 +161,8 @@ describe('prompt-injection', () => {
         test('separates sections with double newlines', () => {
             const result = buildPromptWithSystemContext('User', 'Files', 'System');
             // Should have double newline separators between sections
-            expect(result).toContain('</system-instructions>\n\nFiles');
+            // File context is now wrapped with UNTRUSTED DATA warning (Phase 1 security fix)
+            expect(result).toContain('</system-instructions>\n\nIMPORTANT:');
             expect(result).toContain('Files\n\nUser');
         });
         test('preserves multiline content in each section', () => {

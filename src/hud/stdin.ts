@@ -74,5 +74,5 @@ export function getContextPercent(stdin: StatuslineStdin): number {
  * Get model display name from stdin.
  */
 export function getModelName(stdin: StatuslineStdin): string {
-  return stdin.model?.display_name ?? stdin.model?.id ?? 'Unknown';
+  return stdin.model?.id ?? stdin.model?.display_name ?? 'Unknown';
 }

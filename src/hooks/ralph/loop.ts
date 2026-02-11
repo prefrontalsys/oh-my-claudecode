@@ -38,6 +38,8 @@ import {
   writeUltraworkState as writeUltraworkStateFromModule,
 } from "../ultrawork/index.js";
 import { resolveSessionStatePath, ensureSessionStateDir } from "../../lib/worktree-paths.js";
+import { readTeamPipelineState } from "../team-pipeline/state.js";
+import type { TeamPipelinePhase } from "../team-pipeline/types.js";
 
 // Forward declaration to avoid circular import - check ultraqa state file directly
 export function isUltraQAActive(directory: string, sessionId?: string): boolean {
@@ -279,7 +281,7 @@ export function createRalphLoopHook(directory: string): RalphLoopHook {
     options?: RalphLoopOptions,
   ): boolean => {
     // Mutual exclusion check: cannot start Ralph Loop if UltraQA is active
-    if (isUltraQAActive(directory)) {
+    if (isUltraQAActive(directory, sessionId)) {
       console.error(
         "Cannot start Ralph Loop while UltraQA is active. Cancel UltraQA first with /oh-my-claudecode:cancel.",
       );
@@ -471,6 +473,37 @@ export function recordStoryProgress(
  */
 export function recordPattern(directory: string, pattern: string): boolean {
   return addPattern(directory, pattern);
+}
+
+/**
+ * Check if an active team pipeline should influence ralph loop continuation.
+ * Returns:
+ *  - 'continue' if team is in a phase where ralph should keep looping (team-verify, team-fix, team-exec)
+ *  - 'complete' if team reached a terminal state (complete, failed)
+ *  - null if no team state is active (ralph operates independently)
+ */
+export function getTeamPhaseDirective(
+  directory: string,
+  sessionId?: string,
+): 'continue' | 'complete' | null {
+  const teamState = readTeamPipelineState(directory, sessionId);
+  if (!teamState || !teamState.active) {
+    // Check terminal states even when active=false
+    if (teamState) {
+      const terminalPhases: TeamPipelinePhase[] = ['complete', 'failed'];
+      if (terminalPhases.includes(teamState.phase)) {
+        return 'complete';
+      }
+    }
+    return null;
+  }
+
+  const continuePhases: TeamPipelinePhase[] = ['team-verify', 'team-fix', 'team-exec', 'team-plan', 'team-prd'];
+  if (continuePhases.includes(teamState.phase)) {
+    return 'continue';
+  }
+
+  return null;
 }
 
 /**

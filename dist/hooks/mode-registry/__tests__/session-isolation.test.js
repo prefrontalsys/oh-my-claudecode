@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync
 import { tmpdir } from 'os';
 import { join } from 'path';
 // Import functions to test
-import { getStateFilePath, isModeActive, clearModeState, hasModeState, isModeActiveInAnySession, getActiveSessionsForMode, clearStaleSessionDirs, } from '../index.js';
+import { getStateFilePath, isModeActive, getActiveModes, clearModeState, hasModeState, isModeActiveInAnySession, getActiveSessionsForMode, clearStaleSessionDirs, } from '../index.js';
 import { validateSessionId, resolveSessionStatePath, listSessionIds, } from '../../../lib/worktree-paths.js';
 describe('Session-Scoped State Isolation', () => {
     let tempDir;
@@ -187,6 +187,49 @@ describe('Session-Scoped State Isolation', () => {
             expect(isModeActive('ralph', tempDir, 'session-A')).toBe(true);
             // Session B does NOT see Session A's state
             expect(isModeActive('ralph', tempDir, 'session-B')).toBe(false);
+        });
+    });
+    describe('Team mode state isolation', () => {
+        it('should detect team mode active in session-scoped path', () => {
+            createSessionState('session-team', 'team', { active: true, session_id: 'session-team' });
+            expect(isModeActive('team', tempDir, 'session-team')).toBe(true);
+        });
+        it('should return correct state file path for team mode', () => {
+            const path = getStateFilePath(tempDir, 'team', 'session-team-123');
+            expect(path).toContain('sessions/session-team-123');
+            expect(path).toContain('team-state.json');
+        });
+        it('should isolate team state between sessions', () => {
+            createSessionState('session-A', 'team', { active: true, session_id: 'session-A', stage: 'team-exec' });
+            createSessionState('session-B', 'team', { active: true, session_id: 'session-B', stage: 'team-plan' });
+            // Each session sees its own state
+            expect(isModeActive('team', tempDir, 'session-A')).toBe(true);
+            expect(isModeActive('team', tempDir, 'session-B')).toBe(true);
+            // Verify paths are different
+            const pathA = getStateFilePath(tempDir, 'team', 'session-A');
+            const pathB = getStateFilePath(tempDir, 'team', 'session-B');
+            expect(pathA).not.toBe(pathB);
+        });
+        it('should clear team mode state for specific session only', () => {
+            createSessionState('session-A', 'team', { active: true, session_id: 'session-A' });
+            createSessionState('session-B', 'team', { active: true, session_id: 'session-B' });
+            clearModeState('team', tempDir, 'session-A');
+            // Session A state should be gone
+            expect(isModeActive('team', tempDir, 'session-A')).toBe(false);
+            // Session B state should remain
+            expect(isModeActive('team', tempDir, 'session-B')).toBe(true);
+        });
+        it('should list team in active modes when active', () => {
+            createSessionState('session-team', 'team', { active: true, session_id: 'session-team' });
+            const activeModes = getActiveModes(tempDir, 'session-team');
+            expect(activeModes).toContain('team');
+        });
+        it('should return active sessions for team mode', () => {
+            createSessionState('session-A', 'team', { active: true, session_id: 'session-A' });
+            createSessionState('session-B', 'team', { active: true, session_id: 'session-B' });
+            const activeSessions = getActiveSessionsForMode('team', tempDir);
+            expect(activeSessions).toContain('session-A');
+            expect(activeSessions).toContain('session-B');
         });
     });
 });

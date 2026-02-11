@@ -15,7 +15,8 @@ export declare const omcToolsServer: import("@anthropic-ai/claude-agent-sdk").Mc
  */
 export declare const omcToolNames: string[];
 /**
- * Get tool names filtered by category
+ * Get tool names filtered by category.
+ * Uses category metadata instead of string heuristics.
  */
 export declare function getOmcToolNames(options?: {
     includeLsp?: boolean;

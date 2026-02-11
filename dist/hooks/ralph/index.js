@@ -12,6 +12,8 @@ export {
 readRalphState, writeRalphState, clearRalphState, clearLinkedUltraworkState, incrementRalphIteration, 
 // Loop control
 createRalphLoopHook, isUltraQAActive, 
+// Team coordination
+getTeamPhaseDirective, 
 // PRD integration
 hasPrd, getPrdCompletionStatus, getRalphContext, setCurrentStory, enablePrdMode, recordStoryProgress, recordPattern, shouldCompleteByPrd } from './loop.js';
 // ============================================================================

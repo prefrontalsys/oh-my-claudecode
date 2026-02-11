@@ -37,7 +37,9 @@ export {
 export {
   resolveSystemPrompt,
   buildPromptWithSystemContext,
-  VALID_AGENT_ROLES
+  VALID_AGENT_ROLES,
+  getValidAgentRoles,
+  isValidAgentRoleName
 } from './prompt-injection.js';
 export type { AgentRole } from './prompt-injection.js';
 
@@ -75,3 +77,15 @@ export {
   findJobStatusFile,
   getJobManagementToolSchemas
 } from './job-management.js';
+
+// MCP Configuration module
+export {
+  loadMcpConfig,
+  getMcpConfig,
+  clearMcpConfigCache,
+  isExternalPromptAllowed,
+  getOutputPathPolicy,
+  getOutputRedirectDir,
+  DEFAULT_MCP_CONFIG
+} from './mcp-config.js';
+export type { McpConfig, OutputPathPolicy } from './mcp-config.js';

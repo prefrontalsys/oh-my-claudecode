@@ -13,6 +13,11 @@
  */
 import { StateLocation, StateConfig, StateReadResult, StateWriteResult, StateClearResult, StateMigrationResult, StateFileInfo, ListStatesOptions, CleanupOptions, CleanupResult, StateData } from "./types.js";
 /**
+ * Clear the state read cache.
+ * Exported for testing and for write/clear operations to invalidate stale entries.
+ */
+export declare function clearStateCache(): void;
+/**
  * Get the standard path for a state file
  */
 export declare function getStatePath(name: string, location: StateLocation): string;
@@ -69,6 +74,32 @@ export declare function listStates(options?: ListStatesOptions): StateFileInfo[]
  * Useful for cleaning up abandoned states.
  */
 export declare function cleanupOrphanedStates(options?: CleanupOptions): CleanupResult;
+/**
+ * Determine whether a state's metadata indicates staleness.
+ *
+ * A state is stale when **both** `updatedAt` and `heartbeatAt` (if present)
+ * are older than `maxAgeMs`.  If either timestamp is recent the state is
+ * considered alive — this allows long-running workflows that send heartbeats
+ * to survive the stale-check.
+ */
+export declare function isStateStale(meta: {
+    updatedAt?: string;
+    heartbeatAt?: string;
+}, now: number, maxAgeMs: number): boolean;
+/**
+ * Scan all state files in a directory and mark stale ones as inactive.
+ *
+ * A state is considered stale if both `_meta.updatedAt` and
+ * `_meta.heartbeatAt` are older than `maxAgeMs` (defaults to
+ * MAX_STATE_AGE_MS = 4 hours).  States with a recent heartbeat are
+ * skipped so that long-running workflows are not killed prematurely.
+ *
+ * This is the **only** place that deactivates stale states — the read
+ * path (`readState`) is a pure read with no side-effects.
+ *
+ * @returns Number of states that were marked inactive.
+ */
+export declare function cleanupStaleStates(directory?: string, maxAgeMs?: number): number;
 /**
  * State Manager Class
  *

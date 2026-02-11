@@ -60,6 +60,6 @@ export function getContextPercent(stdin) {
  * Get model display name from stdin.
  */
 export function getModelName(stdin) {
-    return stdin.model?.display_name ?? stdin.model?.id ?? 'Unknown';
+    return stdin.model?.id ?? stdin.model?.display_name ?? 'Unknown';
 }
 //# sourceMappingURL=stdin.js.map

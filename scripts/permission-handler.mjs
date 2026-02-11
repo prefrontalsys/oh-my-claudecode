@@ -14,7 +14,7 @@ async function main() {
     console.log(JSON.stringify(result));
   } catch (error) {
     console.error('[permission-handler] Error:', error.message);
-    process.exit(0); // Don't block on errors
+    console.log(JSON.stringify({ continue: true, suppressOutput: true }));
   }
 }
 

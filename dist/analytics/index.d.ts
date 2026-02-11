@@ -19,5 +19,6 @@ export * from './transcript-parser.js';
 export * from './transcript-token-extractor.js';
 export * from './backfill-dedup.js';
 export * from './backfill-engine.js';
+export * from './session-catalog.js';
 export * from './tokscale-adapter.js';
 //# sourceMappingURL=index.d.ts.map

@@ -43,8 +43,14 @@ export function renderContextWithBar(percent, thresholds, barWidth = 10) {
     const filled = Math.round((safePercent / 100) * barWidth);
     const empty = barWidth - filled;
     let color;
+    let suffix = '';
     if (safePercent >= thresholds.contextCritical) {
         color = RED;
+        suffix = ' CRITICAL';
+    }
+    else if (safePercent >= thresholds.contextCompactSuggestion) {
+        color = YELLOW;
+        suffix = ' COMPRESS?';
     }
     else if (safePercent >= thresholds.contextWarning) {
         color = YELLOW;
@@ -53,6 +59,6 @@ export function renderContextWithBar(percent, thresholds, barWidth = 10) {
         color = GREEN;
     }
     const bar = `${color}${'█'.repeat(filled)}${DIM}${'░'.repeat(empty)}${RESET}`;
-    return `ctx:[${bar}]${color}${safePercent}%${RESET}`;
+    return `ctx:[${bar}]${color}${safePercent}%${suffix}${RESET}`;
 }
 //# sourceMappingURL=context.js.map

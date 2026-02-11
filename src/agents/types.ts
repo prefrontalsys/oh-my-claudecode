@@ -5,7 +5,8 @@
  * Ported from oh-my-opencode's agent type system.
  */
 
-export type ModelType = 'sonnet' | 'opus' | 'haiku' | 'inherit';
+import type { ModelType } from '../shared/types.js';
+export type { ModelType };
 
 /**
  * Cost tier for agent usage

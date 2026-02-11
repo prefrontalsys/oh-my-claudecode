@@ -103,6 +103,14 @@ export declare function recordStoryProgress(directory: string, storyId: string, 
  */
 export declare function recordPattern(directory: string, pattern: string): boolean;
 /**
+ * Check if an active team pipeline should influence ralph loop continuation.
+ * Returns:
+ *  - 'continue' if team is in a phase where ralph should keep looping (team-verify, team-fix, team-exec)
+ *  - 'complete' if team reached a terminal state (complete, failed)
+ *  - null if no team state is active (ralph operates independently)
+ */
+export declare function getTeamPhaseDirective(directory: string, sessionId?: string): 'continue' | 'complete' | null;
+/**
  * Check if ralph should complete based on PRD status
  */
 export declare function shouldCompleteByPrd(directory: string): boolean;

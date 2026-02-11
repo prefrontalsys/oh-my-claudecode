@@ -18,6 +18,10 @@ export interface BackgroundTask {
 export interface OmcHudState {
     timestamp: string;
     backgroundTasks: BackgroundTask[];
+    /** Persisted session start time to survive tail-parsing resets */
+    sessionStartTimestamp?: string;
+    /** Session ID that owns the persisted sessionStartTimestamp */
+    sessionId?: string;
 }
 export interface StatuslineStdin {
     /** Transcript path for parsing conversation history */
@@ -119,6 +123,10 @@ export interface RateLimits {
     sonnetWeeklyPercent?: number;
     /** Sonnet weekly reset time */
     sonnetWeeklyResetsAt?: Date | null;
+    /** Opus-specific weekly usage percentage (0-100), if available from API */
+    opusWeeklyPercent?: number;
+    /** Opus weekly reset time */
+    opusWeeklyResetsAt?: Date | null;
     /** Monthly usage percentage (0-100), if available from API */
     monthlyPercent?: number;
     /** When the monthly limit resets (null if unavailable) */
@@ -155,6 +163,10 @@ export interface HudRenderContext {
     thinkingState: ThinkingState | null;
     /** Session health metrics */
     sessionHealth: SessionHealth | null;
+    /** Installed OMC version (e.g. "4.1.10") */
+    omcVersion: string | null;
+    /** Latest available version from npm registry (null if up to date or unknown) */
+    updateAvailable: string | null;
 }
 export type HudPreset = 'minimal' | 'focused' | 'full' | 'opencode' | 'dense' | 'analytics';
 /**
@@ -183,12 +195,20 @@ export type ThinkingFormat = 'bubble' | 'brain' | 'face' | 'text';
  * - folder: dotfiles (folder name only)
  */
 export type CwdFormat = 'relative' | 'absolute' | 'folder';
+/**
+ * Model name format options:
+ * - short: 'Opus', 'Sonnet', 'Haiku'
+ * - versioned: 'Opus 4.6', 'Sonnet 4.5', 'Haiku 4.5'
+ * - full: raw model ID like 'claude-opus-4-6-20260205'
+ */
+export type ModelFormat = 'short' | 'versioned' | 'full';
 export interface HudElementConfig {
     cwd: boolean;
     cwdFormat: CwdFormat;
     gitRepo: boolean;
     gitBranch: boolean;
     model: boolean;
+    modelFormat: ModelFormat;
     omcLabel: boolean;
     rateLimits: boolean;
     ralph: boolean;
@@ -226,6 +246,10 @@ export interface HudThresholds {
     contextCritical: number;
     /** Ralph iteration that triggers warning color (default: 7) */
     ralphWarning: number;
+    /** Session cost ($) that triggers budget warning (default: 2.0) */
+    budgetWarning: number;
+    /** Session cost ($) that triggers budget critical alert (default: 5.0) */
+    budgetCritical: number;
 }
 export interface HudConfig {
     preset: HudPreset;

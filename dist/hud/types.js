@@ -11,6 +11,7 @@ export const DEFAULT_HUD_CONFIG = {
         gitRepo: false, // Disabled by default for backward compatibility
         gitBranch: false, // Disabled by default for backward compatibility
         model: false, // Disabled by default for backward compatibility
+        modelFormat: 'short', // Short names by default for backward compatibility
         omcLabel: true,
         rateLimits: true, // Show rate limits by default
         ralph: true,
@@ -40,6 +41,8 @@ export const DEFAULT_HUD_CONFIG = {
         contextCompactSuggestion: 80,
         contextCritical: 85,
         ralphWarning: 7,
+        budgetWarning: 2.0,
+        budgetCritical: 5.0,
     },
     staleTaskThresholdMinutes: 30,
 };
@@ -50,6 +53,7 @@ export const PRESET_CONFIGS = {
         gitRepo: false,
         gitBranch: false,
         model: false,
+        modelFormat: 'short',
         omcLabel: true,
         rateLimits: true,
         ralph: true,
@@ -79,6 +83,7 @@ export const PRESET_CONFIGS = {
         gitRepo: false,
         gitBranch: false,
         model: false,
+        modelFormat: 'short',
         omcLabel: false,
         rateLimits: false,
         ralph: false,
@@ -108,6 +113,7 @@ export const PRESET_CONFIGS = {
         gitRepo: false,
         gitBranch: false,
         model: false,
+        modelFormat: 'short',
         omcLabel: true,
         rateLimits: true,
         ralph: true,
@@ -137,6 +143,7 @@ export const PRESET_CONFIGS = {
         gitRepo: false,
         gitBranch: false,
         model: false,
+        modelFormat: 'short',
         omcLabel: true,
         rateLimits: true,
         ralph: true,
@@ -166,6 +173,7 @@ export const PRESET_CONFIGS = {
         gitRepo: false,
         gitBranch: false,
         model: false,
+        modelFormat: 'short',
         omcLabel: true,
         rateLimits: false,
         ralph: true,
@@ -195,6 +203,7 @@ export const PRESET_CONFIGS = {
         gitRepo: false,
         gitBranch: false,
         model: false,
+        modelFormat: 'short',
         omcLabel: true,
         rateLimits: true,
         ralph: true,

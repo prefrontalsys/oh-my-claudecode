@@ -15,6 +15,7 @@ import { readPrd, getPrdStatus, formatNextStoryPrompt, formatPrdStatus, } from "
 import { getProgressContext, appendProgress, initProgress, addPattern, } from "./progress.js";
 import { readUltraworkState as readUltraworkStateFromModule, writeUltraworkState as writeUltraworkStateFromModule, } from "../ultrawork/index.js";
 import { resolveSessionStatePath, ensureSessionStateDir } from "../../lib/worktree-paths.js";
+import { readTeamPipelineState } from "../team-pipeline/state.js";
 // Forward declaration to avoid circular import - check ultraqa state file directly
 export function isUltraQAActive(directory, sessionId) {
     // When sessionId is provided, ONLY check session-scoped path — no legacy fallback
@@ -191,7 +192,7 @@ export function incrementRalphIteration(directory, sessionId) {
 export function createRalphLoopHook(directory) {
     const startLoop = (sessionId, prompt, options) => {
         // Mutual exclusion check: cannot start Ralph Loop if UltraQA is active
-        if (isUltraQAActive(directory)) {
+        if (isUltraQAActive(directory, sessionId)) {
             console.error("Cannot start Ralph Loop while UltraQA is active. Cancel UltraQA first with /oh-my-claudecode:cancel.");
             return false;
         }
@@ -338,6 +339,31 @@ export function recordStoryProgress(directory, storyId, implementation, filesCha
  */
 export function recordPattern(directory, pattern) {
     return addPattern(directory, pattern);
+}
+/**
+ * Check if an active team pipeline should influence ralph loop continuation.
+ * Returns:
+ *  - 'continue' if team is in a phase where ralph should keep looping (team-verify, team-fix, team-exec)
+ *  - 'complete' if team reached a terminal state (complete, failed)
+ *  - null if no team state is active (ralph operates independently)
+ */
+export function getTeamPhaseDirective(directory, sessionId) {
+    const teamState = readTeamPipelineState(directory, sessionId);
+    if (!teamState || !teamState.active) {
+        // Check terminal states even when active=false
+        if (teamState) {
+            const terminalPhases = ['complete', 'failed'];
+            if (terminalPhases.includes(teamState.phase)) {
+                return 'complete';
+            }
+        }
+        return null;
+    }
+    const continuePhases = ['team-verify', 'team-fix', 'team-exec', 'team-plan', 'team-prd'];
+    if (continuePhases.includes(teamState.phase)) {
+        return 'continue';
+    }
+    return null;
 }
 /**
  * Check if ralph should complete based on PRD status

@@ -6,15 +6,15 @@
  */
 
 import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Import timeout-protected stdin reader (prevents hangs on Linux, see issue #240)
+// Import timeout-protected stdin reader (prevents hangs on Linux/Windows, see issue #240, #524)
 let readStdin;
 try {
-  const mod = await import(join(__dirname, 'lib', 'stdin.mjs'));
+  const mod = await import(pathToFileURL(join(__dirname, 'lib', 'stdin.mjs')).href);
   readStdin = mod.readStdin;
 } catch {
   // Fallback: inline timeout-protected readStdin if lib module is missing
@@ -34,7 +34,7 @@ try {
 // Dynamic import of project memory module (prevents crash if dist is missing, see issue #362)
 let registerProjectMemoryContext;
 try {
-  const mod = await import(join(__dirname, '..', 'dist', 'hooks', 'project-memory', 'index.js'));
+  const mod = await import(pathToFileURL(join(__dirname, '..', 'dist', 'hooks', 'project-memory', 'index.js')).href);
   registerProjectMemoryContext = mod.registerProjectMemoryContext;
 } catch {
   // dist not built or missing - skip project memory detection silently
@@ -59,22 +59,16 @@ async function main() {
       await registerProjectMemoryContext(sessionId, directory);
     }
 
-    // Return success (context registered via contextCollector)
+    // Return success (context registered via contextCollector, not returned here)
     console.log(JSON.stringify({
       continue: true,
-      hookSpecificOutput: {
-        hookEventName: 'SessionStart',
-        additionalContext: ''  // Context registered via contextCollector, not returned here
-      }
+      suppressOutput: true
     }));
   } catch (error) {
     // Always continue on error
     console.log(JSON.stringify({
       continue: true,
-      hookSpecificOutput: {
-        hookEventName: 'SessionStart',
-        additionalContext: ''
-      }
+      suppressOutput: true
     }));
   }
 }

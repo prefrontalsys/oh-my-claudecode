@@ -130,13 +130,13 @@ async function main() {
 
     // Ignore user interrupts
     if (isInterrupt) {
-      console.log(JSON.stringify({ continue: true }));
+      console.log(JSON.stringify({ continue: true, suppressOutput: true }));
       return;
     }
 
     // Skip if no tool name or error
     if (!toolName || !error) {
-      console.log(JSON.stringify({ continue: true }));
+      console.log(JSON.stringify({ continue: true, suppressOutput: true }));
       return;
     }
 
@@ -155,10 +155,10 @@ async function main() {
     // Write error state
     writeErrorState(stateDir, toolName, inputPreview, error, retryCount);
 
-    console.log(JSON.stringify({ continue: true }));
+    console.log(JSON.stringify({ continue: true, suppressOutput: true }));
   } catch (error) {
     // Never block on hook errors
-    console.log(JSON.stringify({ continue: true }));
+    console.log(JSON.stringify({ continue: true, suppressOutput: true }));
   }
 }
 

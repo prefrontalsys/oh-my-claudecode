@@ -825,13 +825,6 @@ Use the AskUserQuestion tool with multiple questions:
 2. **build-fixer** - Specialized for build/type error fixing
 3. **designer** - Specialized for UI/frontend work
 
-**Question 3:** "Which model should teammates use by default?"
-
-**Options:**
-1. **sonnet (Recommended)** - Fast, capable, cost-effective for most tasks
-2. **opus** - Maximum capability for complex tasks (higher cost)
-3. **haiku** - Fastest and cheapest, good for simple/repetitive tasks
-
 Store the team configuration in `~/.claude/.omc-config.json`:
 
 ```bash
@@ -844,18 +837,19 @@ else
   EXISTING='{}'
 fi
 
-# Replace MAX_AGENTS, AGENT_TYPE, MODEL with user choices
+# Replace MAX_AGENTS, AGENT_TYPE with user choices
 echo "$EXISTING" | jq \
   --argjson maxAgents MAX_AGENTS \
   --arg agentType "AGENT_TYPE" \
-  --arg model "MODEL" \
-  '. + {team: {maxAgents: $maxAgents, defaultAgentType: $agentType, defaultModel: $model, monitorIntervalMs: 30000, shutdownTimeoutMs: 15000}}' > "$CONFIG_FILE"
+  '. + {team: {maxAgents: $maxAgents, defaultAgentType: $agentType, monitorIntervalMs: 30000, shutdownTimeoutMs: 15000}}' > "$CONFIG_FILE"
 
 echo "Team configuration saved:"
 echo "  Max agents: MAX_AGENTS"
 echo "  Default agent: AGENT_TYPE"
-echo "  Default model: MODEL"
+echo "  Model: teammates inherit your session model"
 ```
+
+**Note:** Teammates do not have a separate model default. Each teammate is a full Claude Code session that inherits your configured model. Subagents spawned by teammates can use any model tier.
 
 #### Verify settings.json Integrity
 

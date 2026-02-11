@@ -1,3 +1,34 @@
+# oh-my-claudecode v4.1.11: The Big Fix Release
+
+This release resolves 12 open issues in a single coordinated effort, fixing HUD rendering bugs, improving Windows compatibility, and restoring MCP agent role discovery.
+
+**63 files changed, 659 insertions, 188 deletions across 12 PRs (#534-#545)**
+
+---
+
+### Critical Fix
+
+- **MCP agent roles broken in CJS bundles** (#545): esbuild replaces `import.meta` with `{}` when bundling to CJS format, causing `VALID_AGENT_ROLES` to be empty. All `agent_role` values passed to `ask_codex` and `ask_gemini` were rejected with "Unknown agent_role". Fixed all 4 `getPackageDir()` functions to fall back to `__dirname` (CJS native) when `import.meta.url` is unavailable.
+
+### Added
+
+- **CLI setup command** (#498): New `omc setup` command provides an official CLI entry point for syncing OMC hooks, agents, and skills. Supports `--force`, `--quiet`, and `--skip-hooks` flags.
+- **Configurable budget thresholds** (#531): HUD budget warning and critical thresholds are now configurable via `HudThresholds` instead of being hardcoded at $2/$5. Defaults preserve existing behavior.
+- **Model version verbosity** (#500): `formatModelName()` now supports `'short'`, `'versioned'`, and `'full'` format levels. Removed the redundant `model:` prefix from HUD display.
+- **Open questions standardization** (#514): Planner and analyst agents now direct unresolved questions to `.omc/plans/open-questions.md` with a shared `formatOpenQuestions()` utility.
+
+### Fixed
+
+- **Context bar missing suffixes** (#532): Bar mode now shows `COMPRESS?` and `CRITICAL` text hints at threshold boundaries, matching the behavior of non-bar mode.
+- **Opus rate limit not parsed** (#529): The HUD now reads `seven_day_opus` from the usage API response, enabling per-model weekly rate limit display for Opus.
+- **Session duration reset on long sessions** (#528): Session start time is now persisted in HUD state (scoped per session ID) to prevent tail-chunk parsing from resetting the displayed duration.
+- **Wrong version in startup hook** (#516): The session-start hook now reads OMC's own `package.json` version instead of the user project's, preventing false update notices and version drift.
+- **Agent type code collisions** (#530): Disambiguated HUD agent codes using 2-character codes: `Qr`/`Qs` (quality-reviewer/strategist), `Pm` (product-manager), `Ia` (information-architect).
+- **Ralph loop ignores Team cancellation** (#533): Ralph now exits cleanly when Team pipeline reaches `cancelled` phase (in addition to `complete`/`failed`). Removed double iteration increment that prematurely consumed the max-iteration budget.
+- **Hooks fail on Windows** (#524): All 14 hook scripts and 5 templates now use `pathToFileURL()` for dynamic imports instead of raw file paths, fixing ESM import failures on Windows. Added `suppressOutput: true` to empty hook responses to mitigate the Claude Code "hook error" display bug.
+
+---
+
 # oh-my-claudecode v4.1.2: Team Model Inheritance
 
 ## Changes

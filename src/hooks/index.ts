@@ -700,7 +700,6 @@ export {
   processSetupInit,
   pruneOldStateFiles,
   cleanupOrphanedState,
-  vacuumSwarmDb,
   processSetupMaintenance,
   processSetup,
   type SetupInput,

@@ -104,7 +104,7 @@ export async function render(context, config) {
             // If showBudgetWarning is explicitly set, use it; otherwise default to true (backward compat)
             const showBudgetAnalytics = enabledElements.showBudgetWarning ?? true;
             if (showBudgetAnalytics && enabledElements.showCost) {
-                const budgetWarning = renderBudgetWarning(context.sessionHealth);
+                const budgetWarning = renderBudgetWarning(context.sessionHealth, config.thresholds);
                 if (budgetWarning)
                     lines.push(budgetWarning);
             }
@@ -145,13 +145,19 @@ export async function render(context, config) {
     }
     // Model name
     if (enabledElements.model && context.modelName) {
-        const modelElement = renderModel(context.modelName);
+        const modelElement = renderModel(context.modelName, enabledElements.modelFormat);
         if (modelElement)
             gitElements.push(modelElement);
     }
-    // [OMC] label
+    // [OMC#X.Y.Z] label with optional update notification
     if (enabledElements.omcLabel) {
-        elements.push(bold('[OMC]'));
+        const versionTag = context.omcVersion ? `#${context.omcVersion}` : '';
+        if (context.updateAvailable) {
+            elements.push(bold(`[OMC${versionTag}] -> ${context.updateAvailable} omc update`));
+        }
+        else {
+            elements.push(bold(`[OMC${versionTag}]`));
+        }
     }
     // Rate limits (5h and weekly)
     if (enabledElements.rateLimits && context.rateLimits) {
@@ -191,7 +197,7 @@ export async function render(context, config) {
         // If showBudgetWarning is explicitly set, use it; otherwise default to true (backward compat)
         const showBudget = enabledElements.showBudgetWarning ?? true;
         if (showBudget && enabledElements.showCost) {
-            const warning = renderBudgetWarning(context.sessionHealth);
+            const warning = renderBudgetWarning(context.sessionHealth, config.thresholds);
             if (warning)
                 detailLines.push(warning);
         }

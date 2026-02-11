@@ -16,6 +16,7 @@ export declare const CODEX_TIMEOUT: number;
 export { CODEX_MODEL_FALLBACKS };
 export declare const CODEX_RECOMMENDED_ROLES: readonly ["architect", "planner", "critic", "analyst", "code-reviewer", "security-reviewer", "tdd-guide"];
 export declare const MAX_FILE_SIZE: number;
+export declare const MAX_STDOUT_BYTES: number;
 /**
  * Check if Codex JSONL output contains a model-not-found error
  */

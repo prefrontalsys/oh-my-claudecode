@@ -17,6 +17,22 @@ describe('model element', () => {
             expect(formatModelName(null)).toBeNull();
             expect(formatModelName(undefined)).toBeNull();
         });
+        it('returns versioned name from model IDs', () => {
+            expect(formatModelName('claude-opus-4-6-20260205', 'versioned')).toBe('Opus 4.6');
+            expect(formatModelName('claude-sonnet-4-5-20250929', 'versioned')).toBe('Sonnet 4.5');
+            expect(formatModelName('claude-haiku-4-5-20251001', 'versioned')).toBe('Haiku 4.5');
+        });
+        it('returns versioned name from display names', () => {
+            expect(formatModelName('Sonnet 4.5', 'versioned')).toBe('Sonnet 4.5');
+            expect(formatModelName('Opus 4.6', 'versioned')).toBe('Opus 4.6');
+            expect(formatModelName('Haiku 4.5', 'versioned')).toBe('Haiku 4.5');
+        });
+        it('falls back to short name when no version found', () => {
+            expect(formatModelName('claude-3-opus-20240229', 'versioned')).toBe('Opus');
+        });
+        it('returns full model ID in full format', () => {
+            expect(formatModelName('claude-opus-4-6-20260205', 'full')).toBe('claude-opus-4-6-20260205');
+        });
         it('truncates long unrecognized model names', () => {
             const longName = 'some-very-long-model-name-that-exceeds-limit';
             expect(formatModelName(longName)?.length).toBeLessThanOrEqual(20);
@@ -25,8 +41,19 @@ describe('model element', () => {
     describe('renderModel', () => {
         it('renders formatted model name', () => {
             const result = renderModel('claude-opus-4-6-20260205');
-            expect(result).toContain('model:');
+            expect(result).not.toBeNull();
             expect(result).toContain('Opus');
+        });
+        it('renders versioned format', () => {
+            const result = renderModel('claude-opus-4-6-20260205', 'versioned');
+            expect(result).not.toBeNull();
+            expect(result).toContain('Opus');
+            expect(result).toContain('4.6');
+        });
+        it('renders full format', () => {
+            const result = renderModel('claude-opus-4-6-20260205', 'full');
+            expect(result).not.toBeNull();
+            expect(result).toContain('claude-opus-4-6');
         });
         it('returns null for null input', () => {
             expect(renderModel(null)).toBeNull();

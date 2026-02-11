@@ -1,11 +1,11 @@
 /**
  * Shared stdin utilities for OMC hooks
- * Provides timeout-protected stdin reading to prevent hangs on Linux
+ * Provides timeout-protected stdin reading to prevent hangs on Linux and Windows
  * See: https://github.com/Yeachan-Heo/oh-my-claudecode/issues/240
  */
 
 /**
- * Read all stdin with timeout to prevent indefinite hang on Linux.
+ * Read all stdin with timeout to prevent indefinite hang on Linux and Windows.
  *
  * The blocking `for await (const chunk of process.stdin)` pattern waits
  * indefinitely for EOF. On Linux, if the parent process doesn't properly

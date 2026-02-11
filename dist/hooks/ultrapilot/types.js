@@ -4,14 +4,14 @@
  * Type definitions for the ultrapilot coordinator - manages parallel worker spawning
  * and coordination with file ownership to avoid conflicts.
  *
- * Ultrapilot decomposes tasks into parallelizable subtasks, spawns workers (max 5),
+ * Ultrapilot decomposes tasks into parallelizable subtasks, spawns workers (max 20),
  * tracks progress, and integrates results while managing shared file access.
  */
 /**
  * Default configuration for ultrapilot
  */
 export const DEFAULT_CONFIG = {
-    maxWorkers: 5,
+    maxWorkers: 20,
     maxIterations: 3,
     workerTimeout: 300000, // 5 minutes
     workerModel: 'sonnet',

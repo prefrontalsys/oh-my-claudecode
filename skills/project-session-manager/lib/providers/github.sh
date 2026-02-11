@@ -26,16 +26,18 @@ provider_github_fetch_issue() {
 provider_github_pr_merged() {
     local pr_number="$1"
     local repo="$2"
+    command -v jq >/dev/null 2>&1 || return 1
     local merged
-    merged=$(gh pr view "$pr_number" --repo "$repo" --json merged 2>/dev/null | jq -r '.merged')
+    merged=$(gh pr view "$pr_number" --repo "$repo" --json merged 2>/dev/null | jq -r '.merged // empty')
     [[ "$merged" == "true" ]]
 }
 
 provider_github_issue_closed() {
     local issue_number="$1"
     local repo="$2"
+    command -v jq >/dev/null 2>&1 || return 1
     local closed
-    closed=$(gh issue view "$issue_number" --repo "$repo" --json closed 2>/dev/null | jq -r '.closed')
+    closed=$(gh issue view "$issue_number" --repo "$repo" --json closed 2>/dev/null | jq -r '.closed // empty')
     [[ "$closed" == "true" ]]
 }
 
