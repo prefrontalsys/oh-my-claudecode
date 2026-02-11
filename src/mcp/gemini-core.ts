@@ -447,7 +447,7 @@ export async function handleAskGemini(args: {
     explicitProvider: 'gemini',
     explicitModel: args.model,  // user explicitly passed model
   });
-  const resolvedModel = resolved.model;
+  const resolvedModel = resolved.model || GEMINI_DEFAULT_MODEL;
 
   // Derive baseDir from working_directory if provided
   let baseDir = args.working_directory || process.cwd();

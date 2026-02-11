@@ -16889,7 +16889,7 @@ async function handleAskGemini(args) {
     explicitModel: args.model
     // user explicitly passed model
   });
-  const resolvedModel = resolved.model;
+  const resolvedModel = resolved.model || GEMINI_DEFAULT_MODEL;
   let baseDir = args.working_directory || process.cwd();
   let baseDirReal;
   const pathPolicy = process.env.OMC_ALLOW_EXTERNAL_WORKDIR === "1" ? "permissive" : "strict";
