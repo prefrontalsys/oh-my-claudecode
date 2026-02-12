@@ -672,6 +672,34 @@ Please continue working on these tasks.
 }
 
 /**
+ * Fire-and-forget notification for AskUserQuestion (issue #597).
+ * Extracted for testability; the dynamic import makes direct assertion
+ * on the notify() call timing-sensitive, so tests spy on this wrapper instead.
+ */
+export function dispatchAskUserQuestionNotification(
+  sessionId: string,
+  directory: string,
+  toolInput: unknown,
+): void {
+  const input = toolInput as { questions?: Array<{ question?: string }> } | undefined;
+  const questions = input?.questions || [];
+  const questionText = questions.map(q => q.question || "").filter(Boolean).join("; ") || "User input requested";
+
+  import("../notifications/index.js").then(({ notify }) =>
+    notify("ask-user-question", {
+      sessionId,
+      projectPath: directory,
+      question: questionText,
+    }).catch(() => {})
+  ).catch(() => {});
+}
+
+/** @internal Object wrapper so tests can spy on the dispatch call. */
+export const _notify = {
+  askUserQuestion: dispatchAskUserQuestionNotification,
+};
+
+/**
  * Process pre-tool-use hook
  * Checks delegation enforcement and tracks background tasks
  */
@@ -693,6 +721,12 @@ function processPreToolUse(input: HookInput): HookOutput {
       reason: enforcementResult.reason,
       message: enforcementResult.message,
     };
+  }
+
+  // Notify when AskUserQuestion is about to execute (issue #597)
+  // Fire-and-forget: notify users that input is needed BEFORE the tool blocks
+  if (input.toolName === "AskUserQuestion" && input.sessionId) {
+    _notify.askUserQuestion(input.sessionId, directory, input.toolInput);
   }
 
   // Warn about pkill -f self-termination risk (issue #210)

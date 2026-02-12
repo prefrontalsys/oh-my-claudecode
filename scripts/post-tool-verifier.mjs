@@ -343,29 +343,6 @@ async function main() {
       processRememberTags(toolOutput, directory);
     }
 
-    // Send notification when AskUserQuestion is used (user input needed)
-    if (toolName === 'AskUserQuestion') {
-      try {
-        const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
-        if (pluginRoot) {
-          const { notify } = await import(pathToFileURL(join(pluginRoot, 'dist', 'notifications', 'index.js')).href);
-
-          const toolInput = data.tool_input || data.toolInput || {};
-          const questions = toolInput.questions || [];
-          const questionText = questions.map(q => q.question || '').filter(Boolean).join('; ') || 'User input requested';
-
-          // Fire and forget
-          notify('ask-user-question', {
-            sessionId,
-            projectPath: directory,
-            question: questionText,
-          }).catch(() => {});
-        }
-      } catch {
-        // Notification not available, skip
-      }
-    }
-
     // Generate contextual message
     const message = generateMessage(toolName, toolOutput, sessionId, toolCount, directory);
 

@@ -8,6 +8,7 @@
 
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
+import { pathToFileURL } from 'url';
 import { readStdin } from './lib/stdin.mjs';
 
 // Simple JSON field extraction
@@ -135,6 +136,31 @@ async function main() {
     let data = {};
     try { data = JSON.parse(input); } catch {}
     recordToolInvocation(data, directory);
+
+    // Send notification when AskUserQuestion is about to execute (user input needed)
+    // Fires in PreToolUse so users get notified BEFORE the tool blocks for input (#597)
+    if (toolName === 'AskUserQuestion') {
+      try {
+        const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT;
+        if (pluginRoot) {
+          const { notify } = await import(pathToFileURL(join(pluginRoot, 'dist', 'notifications', 'index.js')).href);
+
+          const toolInput = data.toolInput || data.tool_input || {};
+          const questions = toolInput.questions || [];
+          const questionText = questions.map(q => q.question || '').filter(Boolean).join('; ') || 'User input requested';
+          const sessionId = data.session_id || data.sessionId || '';
+
+          // Fire and forget - don't block tool execution
+          notify('ask-user-question', {
+            sessionId,
+            projectPath: directory,
+            question: questionText,
+          }).catch(() => {});
+        }
+      } catch {
+        // Notification not available, skip
+      }
+    }
 
     const todoStatus = getTodoStatus(directory);
 
