@@ -1,10 +1,12 @@
 /**
  * Issue #595: Consensus mode execution handoff regression tests
+ * Issue #600: User feedback step between Planner and Architect/Critic
  *
  * Verifies that the plan skill's consensus mode (ralplan) mandates:
  * 1. Structured AskUserQuestion for approval (not plain text)
  * 2. Explicit Skill("oh-my-claudecode:ralph") invocation on approval
  * 3. Prohibition of direct implementation from the planning agent
+ * 4. User feedback step after Planner but before Architect/Critic (#600)
  *
  * Also verifies that non-consensus modes (interview, direct, review) are unaffected.
  */
@@ -113,6 +115,86 @@ describe('Issue #595: Consensus mode execution handoff', () => {
       expect(escalation).toContain('Skill("oh-my-claudecode:ralph")');
       // Old vague language should be gone
       expect(escalation).not.toContain('transition to execution mode (ralph or executor)');
+    });
+  });
+
+  describe('Issue #600: User feedback step between Planner and Architect/Critic', () => {
+    it('should have a user feedback step after Planner and before Architect', () => {
+      const skill = getBuiltinSkill('plan');
+      expect(skill).toBeDefined();
+
+      const consensusSection = extractSection(skill!.template, 'Consensus Mode');
+      expect(consensusSection).toBeDefined();
+
+      // Step ordering: Planner must come before User feedback,
+      // User feedback must come before Architect
+      const plannerIdx = consensusSection!.indexOf('**Planner** creates initial plan');
+      const feedbackIdx = consensusSection!.indexOf('**User feedback**');
+      const architectIdx = consensusSection!.indexOf('**Architect** reviews');
+
+      expect(plannerIdx).toBeGreaterThan(-1);
+      expect(feedbackIdx).toBeGreaterThan(-1);
+      expect(architectIdx).toBeGreaterThan(-1);
+
+      expect(feedbackIdx).toBeGreaterThan(plannerIdx);
+      expect(architectIdx).toBeGreaterThan(feedbackIdx);
+    });
+
+    it('should mandate AskUserQuestion for the user feedback step', () => {
+      const skill = getBuiltinSkill('plan');
+      expect(skill).toBeDefined();
+
+      const consensusSection = extractSection(skill!.template, 'Consensus Mode');
+      expect(consensusSection).toBeDefined();
+
+      // The user feedback step must use MUST + AskUserQuestion
+      expect(consensusSection).toMatch(/User feedback.*MUST.*AskUserQuestion/s);
+    });
+
+    it('should offer Proceed/Request changes/Skip review options in user feedback step', () => {
+      const skill = getBuiltinSkill('plan');
+      expect(skill).toBeDefined();
+
+      const consensusSection = extractSection(skill!.template, 'Consensus Mode');
+      expect(consensusSection).toBeDefined();
+
+      expect(consensusSection).toContain('Proceed to review');
+      expect(consensusSection).toContain('Request changes');
+      expect(consensusSection).toContain('Skip review');
+    });
+
+    it('should place Critic after Architect in the consensus flow', () => {
+      const skill = getBuiltinSkill('plan');
+      expect(skill).toBeDefined();
+
+      const consensusSection = extractSection(skill!.template, 'Consensus Mode');
+      expect(consensusSection).toBeDefined();
+
+      const architectIdx = consensusSection!.indexOf('**Architect** reviews');
+      const criticIdx = consensusSection!.indexOf('**Critic** evaluates');
+
+      expect(architectIdx).toBeGreaterThan(-1);
+      expect(criticIdx).toBeGreaterThan(-1);
+      expect(criticIdx).toBeGreaterThan(architectIdx);
+    });
+
+    it('should include user feedback step in ralplan alias workflow', () => {
+      const skill = getBuiltinSkill('ralplan');
+      expect(skill).toBeDefined();
+
+      expect(skill!.template).toContain('**User feedback**');
+
+      // Verify ordering in ralplan too
+      const plannerIdx = skill!.template.indexOf('**Planner** creates initial plan');
+      const feedbackIdx = skill!.template.indexOf('**User feedback**');
+      const architectIdx = skill!.template.indexOf('**Architect** reviews');
+
+      expect(plannerIdx).toBeGreaterThan(-1);
+      expect(feedbackIdx).toBeGreaterThan(-1);
+      expect(architectIdx).toBeGreaterThan(-1);
+
+      expect(feedbackIdx).toBeGreaterThan(plannerIdx);
+      expect(architectIdx).toBeGreaterThan(feedbackIdx);
     });
   });
 
