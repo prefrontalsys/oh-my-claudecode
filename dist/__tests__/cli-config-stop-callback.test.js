@@ -1,10 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, writeFileSync, readFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { tmpdir } from 'os';
 import { spawnSync } from 'child_process';
-const REPO_ROOT = '/home/bellman/Workspace/oh-my-claudecode-dev';
-const CLI_ENTRY = '/home/bellman/Workspace/oh-my-claudecode-dev/src/cli/index.ts';
+import { fileURLToPath } from 'url';
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = join(__dirname, '..', '..');
+const CLI_ENTRY = join(REPO_ROOT, 'src', 'cli', 'index.ts');
 function runCli(args, homeDir) {
     const result = spawnSync(process.execPath, ['--import', 'tsx', CLI_ENTRY, ...args], {
         cwd: REPO_ROOT,
@@ -31,7 +33,6 @@ describe('omc config-stop-callback tag options', () => {
         mkdirSync(join(homeDir, '.claude'), { recursive: true });
         writeFileSync(configPath, JSON.stringify({
             silentAutoUpdate: false,
-            defaultExecutionMode: 'ecomode',
             taskTool: 'task',
             stopHookCallbacks: {
                 telegram: {
@@ -45,7 +46,6 @@ describe('omc config-stop-callback tag options', () => {
         const replace = runCli(['config-stop-callback', 'telegram', '--tag-list', '@alice,bob'], homeDir);
         expect(replace.status).toBe(0);
         let config = readConfig(configPath);
-        expect(config.defaultExecutionMode).toBe('ecomode');
         expect(config.taskTool).toBe('task');
         expect(config.stopHookCallbacks?.telegram?.tagList).toEqual(['@alice', 'bob']);
         const add = runCli(['config-stop-callback', 'telegram', '--add-tag', 'charlie'], homeDir);
