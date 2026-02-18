@@ -314,6 +314,7 @@ export interface HudElementConfig {
   useBars: boolean;           // Show visual progress bars instead of/alongside percentages
   showCache: boolean;         // Show cache hit rate in analytics displays
   showCost: boolean;          // Show cost/dollar amounts in analytics displays
+  showCallCounts?: boolean;   // Show tool/agent/skill call counts on the right of the status line (default: true)
   maxOutputLines: number;     // Max total output lines to prevent input field shrinkage
   safeMode: boolean;          // Strip ANSI codes and use ASCII-only output to prevent terminal rendering corruption (Issue #346)
 }
@@ -370,6 +371,7 @@ export const DEFAULT_HUD_CONFIG: HudConfig = {
     useBars: false,  // Disabled by default for backwards compatibility
     showCache: true,
     showCost: true,
+    showCallCounts: true,  // Show tool/agent/skill call counts by default (Issue #710)
     maxOutputLines: 4,
     safeMode: true,  // Enabled by default to prevent terminal rendering corruption (Issue #346)
   },
@@ -412,6 +414,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     useBars: false,
     showCache: false,
     showCost: false,
+    showCallCounts: false,
     maxOutputLines: 2,
     safeMode: true,
   },
@@ -442,6 +445,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     useBars: false,
     showCache: true,
     showCost: true,
+    showCallCounts: true,
     maxOutputLines: 4,
     safeMode: true,
   },
@@ -472,6 +476,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     useBars: true,
     showCache: true,
     showCost: true,
+    showCallCounts: true,
     maxOutputLines: 4,
     safeMode: true,
   },
@@ -502,6 +507,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     useBars: true,
     showCache: true,
     showCost: true,
+    showCallCounts: true,
     maxOutputLines: 12,
     safeMode: true,
   },
@@ -532,6 +538,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     useBars: false,
     showCache: true,
     showCost: true,
+    showCallCounts: true,
     maxOutputLines: 4,
     safeMode: true,
   },
@@ -562,6 +569,7 @@ export const PRESET_CONFIGS: Record<HudPreset, Partial<HudElementConfig>> = {
     useBars: true,
     showCache: true,
     showCost: true,
+    showCallCounts: true,
     maxOutputLines: 6,
     safeMode: true,
   },
