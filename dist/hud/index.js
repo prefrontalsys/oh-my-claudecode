@@ -17,7 +17,7 @@ import { extractSessionId } from "../analytics/output-estimator.js";
 import { getTokenTracker } from "../analytics/token-tracker.js";
 import { getRuntimePackageVersion } from "../lib/version.js";
 import { compareVersions } from "../features/auto-update.js";
-import { existsSync, readFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 // Persistent token snapshot for delta calculations
@@ -333,6 +333,26 @@ async function main() {
         if (process.env.OMC_DEBUG) {
             console.error("[HUD DEBUG] stdin.context_window:", JSON.stringify(stdin.context_window));
             console.error("[HUD DEBUG] sessionHealth:", JSON.stringify(context.sessionHealth));
+        }
+        // autoCompact: write trigger file when context exceeds threshold
+        // A companion hook can read this file to inject a /compact suggestion.
+        if (config.contextLimitWarning.autoCompact &&
+            context.contextPercent >= config.contextLimitWarning.threshold) {
+            try {
+                const omcStateDir = join(cwd, '.omc', 'state');
+                if (!existsSync(omcStateDir)) {
+                    mkdirSync(omcStateDir, { recursive: true });
+                }
+                const triggerFile = join(omcStateDir, 'compact-requested.json');
+                writeFileSync(triggerFile, JSON.stringify({
+                    requestedAt: new Date().toISOString(),
+                    contextPercent: context.contextPercent,
+                    threshold: config.contextLimitWarning.threshold,
+                }));
+            }
+            catch {
+                // Silent failure — don't break HUD rendering
+            }
         }
         // Render and output
         let output = await render(context, config);

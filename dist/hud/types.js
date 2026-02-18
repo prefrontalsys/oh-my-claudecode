@@ -45,6 +45,10 @@ export const DEFAULT_HUD_CONFIG = {
         budgetCritical: 5.0,
     },
     staleTaskThresholdMinutes: 30,
+    contextLimitWarning: {
+        threshold: 80,
+        autoCompact: false,
+    },
 };
 export const PRESET_CONFIGS = {
     minimal: {
