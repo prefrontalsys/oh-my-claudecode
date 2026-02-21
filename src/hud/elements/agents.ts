@@ -130,7 +130,7 @@ const AGENT_TYPE_CODES: Record<string, string> = {
   // ============================================================
   // BACKWARD COMPATIBILITY (Deprecated)
   // ============================================================
-  // Researcher - 'R' for Researcher (deprecated, points to dependency-expert)
+  // Researcher - 'r' for Researcher (deprecated, points to document-specialist)
   researcher: 'r',          // sonnet
 };
 

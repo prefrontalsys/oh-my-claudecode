@@ -62,7 +62,7 @@ oh-my-claudecode enhances Claude Code with:
    | Build errors | `build-fixer` | sonnet |
    | Testing | `qa-tester` | sonnet |
    | Code review | `code-reviewer` | opus |
-   | TDD | `tdd-guide` / `tdd-guide-low` | sonnet/haiku |
+   | TDD | `test-engineer` / `test-engineer-low` | sonnet/haiku |
    | Data analysis | `scientist` / `scientist-high` | sonnet/opus |
 
 2. **LSP/AST Tools**: Use IDE-like tools for code intelligence:
@@ -215,14 +215,14 @@ import { allCustomTools, lspTools, astTools } from './tools';
 |-------|-------|---------|
 | security-reviewer | opus | Security vulnerability detection and audits |
 | build-fixer | sonnet | Build/type error resolution (multi-language) |
-| tdd-guide | sonnet | Test-driven development workflow |
+| test-engineer | sonnet | Test-driven development workflow |
 | code-reviewer | opus | Expert code review and quality assessment |
 
 ### Tiered Variants (12)
 
 | Tier | Agents |
 |------|--------|
-| **LOW** (Haiku) | `architect-low`, `executor-low`, `designer-low`, `security-reviewer-low`, `tdd-guide-low` (5) |
+| **LOW** (Haiku) | `architect-low`, `executor-low`, `designer-low`, `security-reviewer-low`, `test-engineer-low` (5) |
 | **MEDIUM** (Sonnet) | `architect-medium` (1) |
 | **HIGH** (Opus) | `executor-high`, `designer-high`, `explore-high`, `scientist-high`, `deep-executor` (5) |
 
