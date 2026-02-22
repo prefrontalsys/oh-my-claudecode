@@ -161,6 +161,25 @@ describe('Builtin Skills', () => {
             expect(names).toContain('psm');
         });
     });
+    describe('CC native command denylist (issue #830)', () => {
+        it('should not expose any builtin skill whose name is a bare CC native command', () => {
+            const skills = createBuiltinSkills();
+            const bareNativeNames = [
+                'compact', 'clear', 'help', 'config', 'plan',
+                'review', 'doctor', 'init', 'memory', 'security-review',
+            ];
+            const skillNames = skills.map((s) => s.name.toLowerCase());
+            for (const native of bareNativeNames) {
+                expect(skillNames).not.toContain(native);
+            }
+        });
+        it('should not return a skill for "compact" via getBuiltinSkill', () => {
+            expect(getBuiltinSkill('compact')).toBeUndefined();
+        });
+        it('should not return a skill for "clear" via getBuiltinSkill', () => {
+            expect(getBuiltinSkill('clear')).toBeUndefined();
+        });
+    });
     describe('Template strings', () => {
         const skills = createBuiltinSkills();
         it('should have non-empty templates', () => {

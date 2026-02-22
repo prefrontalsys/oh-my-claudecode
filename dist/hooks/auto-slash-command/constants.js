@@ -25,6 +25,7 @@ export const EXCLUDED_COMMANDS = new Set([
     // Claude Code built-in commands that shouldn't be expanded
     'help',
     'clear',
+    'compact',
     'history',
     'exit',
     'quit',

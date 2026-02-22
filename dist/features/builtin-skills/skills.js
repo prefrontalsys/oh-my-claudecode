@@ -132,6 +132,7 @@ const CC_NATIVE_COMMANDS = new Set([
     'help',
     'config',
     'clear',
+    'compact',
     'memory',
 ]);
 /**
