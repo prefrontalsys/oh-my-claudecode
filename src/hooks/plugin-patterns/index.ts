@@ -218,12 +218,18 @@ export function validateCommitMessage(
     return { valid: false, errors };
   }
 
+  // Determine effective types: prefer config.types when non-empty
+  const effectiveTypes = config?.types?.length ? config.types : DEFAULT_COMMIT_TYPES;
+  const commitRegex = effectiveTypes === DEFAULT_COMMIT_TYPES
+    ? CONVENTIONAL_COMMIT_REGEX
+    : new RegExp(`^(${effectiveTypes.join('|')})(\\([a-z0-9-]+\\))?(!)?:\\s.+$`);
+
   // Check conventional commit format
-  if (!CONVENTIONAL_COMMIT_REGEX.test(subject)) {
+  if (!commitRegex.test(subject)) {
     errors.push(
       'Subject must follow conventional commit format: type(scope?): description'
     );
-    errors.push(`Allowed types: ${DEFAULT_COMMIT_TYPES.join(', ')}`);
+    errors.push(`Allowed types: ${effectiveTypes.join(', ')}`);
   }
 
   // Check subject length
