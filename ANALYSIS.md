@@ -592,12 +592,12 @@ stopping after partial implementation"
 **Framework:** OpenCode plugin
 **Ecosystem:**
 - Part of multi-agent orchestration system
-- Sisyphus/Coordinator as primary orchestrators
+- OMC/Coordinator as primary orchestrators
 - Specialized agents: Architect, Document-Specialist, Explore, Planner, Analyst, Critic
 - Can be invoked by orchestrators for deep work
 
 **Integration:**
-- Receives delegated tasks from Sisyphus/Coordinator
+- Receives delegated tasks from OMC/Coordinator
 - Works alongside other specialized agents
 - Part of larger workflow orchestration
 
@@ -617,7 +617,7 @@ stopping after partial implementation"
 | Aspect | Hephaestus (OMO) | Deep-Executor (OMC) |
 |--------|------------------|---------------------|
 | **Primary usage** | Delegated deep work | Direct OR delegated |
-| **Orchestration** | Sisyphus/Coordinator invoke | Multiple modes can invoke |
+| **Orchestration** | OMC/Coordinator invoke | Multiple modes can invoke |
 | **Agent collaboration** | Can delegate to explore/document-specialist | Fully isolated |
 | **Framework scope** | Part of OpenCode ecosystem | Part of Claude Code ecosystem |
 
@@ -1194,7 +1194,7 @@ BEST OF BOTH WORLDS:
 
 2. **Supporting Documentation**:
    - README.md - Project overview and philosophy
-   - Sisyphus prompt - Orchestrator patterns
+   - OMC prompt - Orchestrator patterns
    - AGENTS.md - Agent definitions and relationships
 
 3. **Key Insights**:

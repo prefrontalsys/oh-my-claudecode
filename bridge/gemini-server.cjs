@@ -16185,8 +16185,8 @@ var DEFAULT_CONFIG = {
     // New agents from oh-my-opencode
     critic: { model: "claude-opus-4-6-20260205", enabled: true },
     analyst: { model: "claude-opus-4-6-20260205", enabled: true },
-    orchestratorSisyphus: { model: "claude-sonnet-4-6-20260217", enabled: true },
-    sisyphusJunior: { model: "claude-sonnet-4-6-20260217", enabled: true },
+    coordinator: { model: "claude-sonnet-4-6-20260217", enabled: true },
+    executor: { model: "claude-sonnet-4-6-20260217", enabled: true },
     planner: { model: "claude-opus-4-6-20260205", enabled: true }
   },
   features: {
@@ -16284,8 +16284,8 @@ var DEFAULT_CONFIG = {
 function getConfigPaths() {
   const userConfigDir = getConfigDir2();
   return {
-    user: (0, import_path8.join)(userConfigDir, "claude-sisyphus", "config.jsonc"),
-    project: (0, import_path8.join)(process.cwd(), ".claude", "sisyphus.jsonc")
+    user: (0, import_path8.join)(userConfigDir, "claude-omc", "config.jsonc"),
+    project: (0, import_path8.join)(process.cwd(), ".claude", "omc.jsonc")
   };
 }
 function loadJsoncFile(path) {

@@ -8,7 +8,7 @@ export * from './types.js';
 export { createAgentToolRestrictions, mergeAgentConfig, buildDelegationTable, buildUseAvoidSection, createEnvContext, getAvailableAgents, buildKeyTriggersSection, validateAgentConfig, deepMerge, loadAgentPrompt, formatOpenQuestions, OPEN_QUESTIONS_PATH } from './utils.js';
 export { architectAgent, ARCHITECT_PROMPT_METADATA } from './architect.js';
 export { exploreAgent, EXPLORE_PROMPT_METADATA } from './explore.js';
-export { executorAgent, SISYPHUS_JUNIOR_PROMPT_METADATA } from './executor.js';
+export { executorAgent, EXECUTOR_PROMPT_METADATA } from './executor.js';
 export { designerAgent, FRONTEND_ENGINEER_PROMPT_METADATA } from './designer.js';
 export { writerAgent, DOCUMENT_WRITER_PROMPT_METADATA } from './writer.js';
 export { criticAgent, CRITIC_PROMPT_METADATA } from './critic.js';
@@ -25,5 +25,5 @@ export { qualityReviewerAgent } from './definitions.js';
 export { testEngineerAgent } from './definitions.js';
 export { securityReviewerAgent, buildFixerAgent, codeReviewerAgent, gitMasterAgent, codeSimplifierAgent } from './definitions.js';
 export { getAgentDefinitions, omcSystemPrompt } from './definitions.js';
-export { coordinatorAgent, ORCHESTRATOR_SISYPHUS_PROMPT_METADATA } from './coordinator-deprecated.js';
+export { coordinatorAgent, ORCHESTRATOR_COORDINATOR_PROMPT_METADATA } from './coordinator-deprecated.js';
 //# sourceMappingURL=index.d.ts.map
