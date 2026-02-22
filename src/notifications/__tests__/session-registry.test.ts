@@ -343,6 +343,36 @@ describe("session-registry", () => {
       const result = lookupByMessageId("telegram", "123");
       expect(result).toBeNull();
     });
+
+    it("returns the most recent entry when duplicate message IDs exist", () => {
+      const older: SessionMapping = {
+        platform: "discord-bot",
+        messageId: "dup-id",
+        sessionId: "session-old",
+        tmuxPaneId: "%0",
+        tmuxSessionName: "old-session",
+        event: "session-start",
+        createdAt: new Date(Date.now() - 5000).toISOString(),
+      };
+
+      const newer: SessionMapping = {
+        platform: "discord-bot",
+        messageId: "dup-id",
+        sessionId: "session-new",
+        tmuxPaneId: "%1",
+        tmuxSessionName: "new-session",
+        event: "session-start",
+        createdAt: new Date().toISOString(),
+      };
+
+      registerMessage(older);
+      registerMessage(newer);
+
+      const result = lookupByMessageId("discord-bot", "dup-id");
+      expect(result).not.toBeNull();
+      expect(result?.sessionId).toBe("session-new");
+      expect(result?.tmuxPaneId).toBe("%1");
+    });
   });
 
   describe("removeSession", () => {

@@ -355,13 +355,13 @@ function readAllMappingsUnsafe(): SessionMapping[] {
 
 /**
  * Look up a mapping by platform and message ID.
- * Returns the first match (most recent entry wins if duplicates exist).
+ * Returns the most recent entry when duplicates exist (last match in append-ordered JSONL).
  */
 export function lookupByMessageId(platform: string, messageId: string): SessionMapping | null {
   const mappings = loadAllMappings();
 
-  // Find first match (JSONL is append-only, so first occurrence is the original)
-  return mappings.find(m => m.platform === platform && m.messageId === messageId) || null;
+  // Use findLast so that the most recently appended entry wins when duplicates exist.
+  return mappings.findLast(m => m.platform === platform && m.messageId === messageId) ?? null;
 }
 
 /**
