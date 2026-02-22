@@ -8,13 +8,13 @@
  * This module is SDK-agnostic and contains no dependencies on @anthropic-ai/claude-agent-sdk.
  */
 import { spawn } from 'child_process';
-import { mkdirSync, readFileSync, realpathSync, statSync, writeFileSync } from 'fs';
+import { mkdirSync, readFileSync, realpathSync, writeFileSync } from 'fs';
 import { resolve, relative, sep, isAbsolute, join } from 'path';
 import { createStdoutCollector, safeWriteOutputFile } from './shared-exec.js';
 import { detectCodexCli } from './cli-detection.js';
 import { getWorktreeRoot } from '../lib/worktree-paths.js';
 import { isExternalPromptAllowed } from './mcp-config.js';
-import { resolveSystemPrompt, buildPromptWithSystemContext, wrapUntrustedFileContent, wrapUntrustedCliResponse, isValidAgentRoleName, VALID_AGENT_ROLES, singleErrorBlock, inlineSuccessBlocks } from './prompt-injection.js';
+import { resolveSystemPrompt, buildPromptWithSystemContext, wrapUntrustedCliResponse, isValidAgentRoleName, VALID_AGENT_ROLES, singleErrorBlock, inlineSuccessBlocks } from './prompt-injection.js';
 import { persistPrompt, persistResponse, getExpectedResponsePath, getPromptsDir, slugify, generatePromptId } from './prompt-persistence.js';
 import { writeJobStatus, getStatusFilePath, readJobStatus } from './prompt-persistence.js';
 import { resolveExternalModel, buildFallbackChain, CODEX_MODEL_FALLBACKS, } from '../features/model-routing/external-model-policy.js';
@@ -597,41 +597,6 @@ export function executeCodexBackground(fullPrompt, modelInput, jobMeta, workingD
     }
 }
 /**
- * Validate and read a file for context inclusion
- */
-export function validateAndReadFile(filePath, baseDir) {
-    if (typeof filePath !== 'string') {
-        return `--- File: ${filePath} --- (Invalid path type)`;
-    }
-    try {
-        const workingDir = baseDir || process.cwd();
-        const resolvedAbs = resolve(workingDir, filePath);
-        // Security: ensure file is within working directory (worktree boundary)
-        const cwdReal = realpathSync(workingDir);
-        const relAbs = relative(cwdReal, resolvedAbs);
-        if (relAbs === '..' || relAbs.startsWith('..' + sep) || isAbsolute(relAbs)) {
-            return `[BLOCKED] File '${filePath}' is outside the working directory. Only files within the project are allowed.`;
-        }
-        // Symlink-safe check: ensure the real path also stays inside the boundary.
-        const resolvedReal = realpathSync(resolvedAbs);
-        const relReal = relative(cwdReal, resolvedReal);
-        if (relReal === '..' || relReal.startsWith('..' + sep) || isAbsolute(relReal)) {
-            return `[BLOCKED] File '${filePath}' is outside the working directory. Only files within the project are allowed.`;
-        }
-        const stats = statSync(resolvedReal);
-        if (!stats.isFile()) {
-            return `--- File: ${filePath} --- (Not a regular file)`;
-        }
-        if (stats.size > MAX_FILE_SIZE) {
-            return `--- File: ${filePath} --- (File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB, max 5MB)`;
-        }
-        return wrapUntrustedFileContent(filePath, readFileSync(resolvedReal, 'utf-8'));
-    }
-    catch {
-        return `--- File: ${filePath} --- (Error reading file)`;
-    }
-}
-/**
  * Handle ask_codex tool invocation with all business logic
  *
  * This function contains ALL the tool handler logic and can be used by both
@@ -836,7 +801,7 @@ ${resolvedPrompt}`;
     // Build file context
     let fileContext;
     if (context_files && context_files.length > 0) {
-        fileContext = context_files.map(f => validateAndReadFile(f, baseDir)).join('\n\n');
+        fileContext = `The following files are available for reference. Use your file tools to read them as needed:\n${context_files.map(f => `- ${f}`).join('\n')}`;
     }
     // Combine: system prompt > file context > user prompt
     const fullPrompt = buildPromptWithSystemContext(userPrompt, fileContext, resolvedSystemPrompt);

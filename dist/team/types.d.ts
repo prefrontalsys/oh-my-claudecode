@@ -50,7 +50,7 @@ export interface InboxMessage {
 }
 /** JSONL message from worker -> lead (outbox) */
 export interface OutboxMessage {
-    type: 'ready' | 'task_complete' | 'task_failed' | 'idle' | 'shutdown_ack' | 'drain_ack' | 'heartbeat' | 'error';
+    type: 'ready' | 'task_complete' | 'task_failed' | 'idle' | 'shutdown_ack' | 'drain_ack' | 'heartbeat' | 'error' | 'all_tasks_complete';
     taskId?: string;
     summary?: string;
     message?: string;

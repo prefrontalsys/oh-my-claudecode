@@ -26,7 +26,7 @@ const askGeminiTool = tool(
     prompt: { type: "string", description: "Inline prompt string. Alternative to prompt_file -- the prompt is auto-persisted to a file for audit trail. When used, output_file is optional (auto-generated if omitted) and the response is returned inline in the MCP result. If both prompt and prompt_file are provided, prompt_file takes precedence." },
     prompt_file: { type: "string", description: "Path to file containing the prompt. A defined (non-undefined) `prompt_file` value selects file mode; `prompt_file` must be a non-empty string when used. Passing null or non-string values triggers file-mode validation (not inline fallback)." },
     output_file: { type: "string", description: "Required for file-based mode (prompt_file). Auto-generated in inline mode (prompt). Response content is returned inline only when using prompt parameter." },
-    files: { type: "array", items: { type: "string" }, description: "File paths to include as context (contents will be prepended to prompt)" },
+    files: { type: "array", items: { type: "string" }, description: "File paths to pass to Gemini for reference (Gemini will read them using its own file tools)" },
     model: { type: "string", description: `Gemini model to use (default: ${GEMINI_DEFAULT_MODEL}). Set OMC_GEMINI_DEFAULT_MODEL env var to change default. Auto-fallback chain: ${GEMINI_MODEL_FALLBACKS.join(' → ')}.` },
     background: { type: "boolean", description: "Run in background (non-blocking). Returns immediately with job metadata and file paths. Check response file for completion. Not available with inline prompt." },
     working_directory: { type: "string", description: "Working directory for path resolution and CLI execution. Defaults to process.cwd()." },

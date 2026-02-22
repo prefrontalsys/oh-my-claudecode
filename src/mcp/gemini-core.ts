@@ -19,7 +19,7 @@ import { createStdoutCollector, safeWriteOutputFile } from './shared-exec.js';
 import { detectGeminiCli } from './cli-detection.js';
 import { getWorktreeRoot } from '../lib/worktree-paths.js';
 import { isExternalPromptAllowed } from './mcp-config.js';
-import { resolveSystemPrompt, buildPromptWithSystemContext, wrapUntrustedFileContent, wrapUntrustedCliResponse, isValidAgentRoleName, VALID_AGENT_ROLES, singleErrorBlock, inlineSuccessBlocks } from './prompt-injection.js';
+import { resolveSystemPrompt, buildPromptWithSystemContext, wrapUntrustedCliResponse, isValidAgentRoleName, VALID_AGENT_ROLES, singleErrorBlock, inlineSuccessBlocks } from './prompt-injection.js';
 import { persistPrompt, persistResponse, getExpectedResponsePath, getPromptsDir, generatePromptId, slugify } from './prompt-persistence.js';
 import { writeJobStatus, getStatusFilePath, readJobStatus } from './prompt-persistence.js';
 import type { JobStatus, BackgroundJobMeta } from './prompt-persistence.js';
@@ -370,44 +370,6 @@ export function executeGeminiBackground(
   }
 }
 
-/**
- * Validate and read a file for context inclusion
- */
-export function validateAndReadFile(filePath: string, baseDir?: string): string {
-  if (typeof filePath !== 'string') {
-    return `--- File: ${filePath} --- (Invalid path type)`;
-  }
-  try {
-    const resolvedAbs = resolve(baseDir || process.cwd(), filePath);
-
-    // Security: ensure file is within working directory (worktree boundary)
-    const cwd = baseDir || process.cwd();
-    const cwdReal = realpathSync(cwd);
-
-    const relAbs = relative(cwdReal, resolvedAbs);
-    if (relAbs === '..' || relAbs.startsWith('..' + sep) || isAbsolute(relAbs)) {
-      return `[BLOCKED] File '${filePath}' is outside the working directory. Only files within the project are allowed.`;
-    }
-
-    // Symlink-safe check: ensure the real path also stays inside the boundary.
-    const resolvedReal = realpathSync(resolvedAbs);
-    const relReal = relative(cwdReal, resolvedReal);
-    if (relReal === '..' || relReal.startsWith('..' + sep) || isAbsolute(relReal)) {
-      return `[BLOCKED] File '${filePath}' is outside the working directory. Only files within the project are allowed.`;
-    }
-
-    const stats = statSync(resolvedReal);
-    if (!stats.isFile()) {
-      return `--- File: ${filePath} --- (Not a regular file)`;
-    }
-    if (stats.size > MAX_FILE_SIZE) {
-      return `--- File: ${filePath} --- (File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB, max 5MB)`;
-    }
-    return wrapUntrustedFileContent(filePath, readFileSync(resolvedReal, 'utf-8'));
-  } catch {
-    return `--- File: ${filePath} --- (Error reading file)`;
-  }
-}
 
 /**
  * Handle ask_gemini tool request - contains ALL business logic
@@ -618,7 +580,7 @@ ${resolvedPrompt}`;
   // Build file context
   let fileContext: string | undefined;
   if (files && files.length > 0) {
-    fileContext = files.map(f => validateAndReadFile(f, baseDir)).join('\n\n');
+    fileContext = `The following files are available for reference. Use your file tools to read them as needed:\n${files.map(f => `- ${f}`).join('\n')}`;
   }
 
   // Combine: system prompt > file context > user prompt

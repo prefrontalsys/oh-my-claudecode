@@ -29,7 +29,7 @@ describe('buildPromptWithSystemContext', () => {
   it('prepends header before file context', () => {
     const result = buildPromptWithSystemContext('task', 'file contents', undefined);
     const headerIdx = result.indexOf(SUBAGENT_HEADER);
-    const fileIdx = result.indexOf('UNTRUSTED DATA');
+    const fileIdx = result.indexOf('file contents');
     expect(headerIdx).toBe(0);
     expect(fileIdx).toBeGreaterThan(headerIdx);
   });
@@ -38,7 +38,7 @@ describe('buildPromptWithSystemContext', () => {
     const result = buildPromptWithSystemContext('user task', 'file data', 'system role');
     const headerIdx = result.indexOf(SUBAGENT_HEADER);
     const sysIdx = result.indexOf('<system-instructions>');
-    const fileIdx = result.indexOf('UNTRUSTED DATA');
+    const fileIdx = result.indexOf('file data');
     const userIdx = result.indexOf('user task');
     expect(headerIdx).toBeLessThan(sysIdx);
     expect(sysIdx).toBeLessThan(fileIdx);

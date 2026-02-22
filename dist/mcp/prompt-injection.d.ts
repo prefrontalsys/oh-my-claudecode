@@ -28,11 +28,6 @@ export type AgentRole = string;
  */
 export declare function resolveSystemPrompt(systemPrompt?: string, agentRole?: string, provider?: ExternalModelProvider): string | undefined;
 /**
- * Wrap file content with untrusted delimiters to prevent prompt injection.
- * Each file's content is clearly marked as data to analyze, not instructions.
- */
-export declare function wrapUntrustedFileContent(filepath: string, content: string): string;
-/**
  * Wrap CLI response content with untrusted delimiters to prevent prompt injection.
  * Used for inline CLI responses that are returned directly to the caller.
  */
@@ -58,9 +53,14 @@ export declare function inlineSuccessBlocks(metadataText: string, wrappedRespons
     isError: false;
 };
 /**
+ * Header prepended to all prompts sent to subagent CLIs (Codex/Gemini).
+ * Prevents recursive subagent spawning and rate limit cascade issues.
+ */
+export declare const SUBAGENT_HEADER = "[SUBAGENT MODE] You are running as a subagent. DO NOT spawn additional subagents or call Codex/Gemini CLI recursively. Focus only on your assigned task.";
+/**
  * Build the full prompt with system prompt prepended.
  *
- * Order: system_prompt > file_context > user_prompt
+ * Order: subagent_header > system_prompt > file_context > user_prompt
  *
  * Uses clear XML-like delimiters so the external model can distinguish sections.
  * File context is wrapped with untrusted data warnings to mitigate prompt injection.

@@ -94,10 +94,6 @@ export declare function executeCodexBackground(fullPrompt: string, modelInput: s
     error: string;
 };
 /**
- * Validate and read a file for context inclusion
- */
-export declare function validateAndReadFile(filePath: string, baseDir?: string): string;
-/**
  * Handle ask_codex tool invocation with all business logic
  *
  * This function contains ALL the tool handler logic and can be used by both

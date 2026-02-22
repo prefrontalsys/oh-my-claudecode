@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-import { resolveSystemPrompt, buildPromptWithSystemContext, VALID_AGENT_ROLES, getValidAgentRoles, isValidAgentRoleName } from '../mcp/prompt-injection.js';
+import { resolveSystemPrompt, buildPromptWithSystemContext, VALID_AGENT_ROLES, getValidAgentRoles, isValidAgentRoleName, SUBAGENT_HEADER } from '../mcp/prompt-injection.js';
 describe('prompt-injection', () => {
     describe('VALID_AGENT_ROLES', () => {
         test('contains expected agent roles', () => {
@@ -123,9 +123,9 @@ describe('prompt-injection', () => {
         });
     });
     describe('buildPromptWithSystemContext', () => {
-        test('returns just user prompt when no extras', () => {
+        test('returns subagent header + user prompt when no extras', () => {
             const result = buildPromptWithSystemContext('Hello', undefined, undefined);
-            expect(result).toBe('Hello');
+            expect(result).toBe(`${SUBAGENT_HEADER}\n\nHello`);
         });
         test('prepends system prompt with delimiters', () => {
             const result = buildPromptWithSystemContext('Hello', undefined, 'You are a reviewer');
@@ -160,8 +160,7 @@ describe('prompt-injection', () => {
         test('separates sections with double newlines', () => {
             const result = buildPromptWithSystemContext('User', 'Files', 'System');
             // Should have double newline separators between sections
-            // File context is now wrapped with UNTRUSTED DATA warning (Phase 1 security fix)
-            expect(result).toContain('</system-instructions>\n\nIMPORTANT:');
+            expect(result).toContain('</system-instructions>\n\nFiles');
             expect(result).toContain('Files\n\nUser');
         });
         test('preserves multiline content in each section', () => {
