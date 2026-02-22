@@ -212,6 +212,10 @@ function getCodeBlockRanges(lines: string[]): Array<[number, number]> {
       }
     }
   }
+  // Unclosed fence: treat every line after the opening fence as inside a code block
+  if (openIndex !== null) {
+    ranges.push([openIndex, lines.length]);
+  }
   return ranges;
 }
 

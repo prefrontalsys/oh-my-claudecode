@@ -75,6 +75,24 @@ describe('resolveLiveData - basic', () => {
     expect(mockedExecSync).toHaveBeenCalledTimes(1);
   });
 
+  it('skips !lines inside an unclosed/unterminated fenced code block', () => {
+    mockedExecSync.mockReturnValue('ran\n');
+    // Opening fence is never closed — directive must not execute
+    const input = '```\n!echo skip-me';
+    const result = resolveLiveData(input);
+    expect(result).toContain('!echo skip-me');
+    expect(mockedExecSync).not.toHaveBeenCalled();
+  });
+
+  it('skips multiple !lines after an unclosed fence', () => {
+    mockedExecSync.mockReturnValue('ran\n');
+    const input = 'before\n```bash\n!echo one\n!echo two';
+    const result = resolveLiveData(input);
+    expect(result).toContain('!echo one');
+    expect(result).toContain('!echo two');
+    expect(mockedExecSync).not.toHaveBeenCalled();
+  });
+
   it('handles failed commands with error attribute', () => {
     const error = new Error('command failed') as Error & { stderr: string };
     error.stderr = 'permission denied\n';
