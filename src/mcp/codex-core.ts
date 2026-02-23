@@ -214,7 +214,7 @@ export function executeCodex(prompt: string, model: string, cwd?: string, reason
   return new Promise((resolve, reject) => {
     validateModelName(model);
     let settled = false;
-    const args = ['exec', '-m', model, '--json', '--full-auto'];
+    const args = ['exec', '-m', model, '--json', '--full-auto', '--skip-git-repo-check'];
     // Per-call reasoning effort override via Codex CLI -c flag
     if (reasoningEffort && VALID_REASONING_EFFORTS.includes(reasoningEffort)) {
       args.push('-c', `model_reasoning_effort="${reasoningEffort}"`);
@@ -393,7 +393,7 @@ export function executeCodexBackground(
     // Helper to try spawning with a specific model
     const trySpawnWithModel = (tryModel: string, remainingModels: string[], rateLimitAttempt: number = 0): { pid: number } | { error: string } => {
       validateModelName(tryModel);
-      const args = ['exec', '-m', tryModel, '--json', '--full-auto'];
+      const args = ['exec', '-m', tryModel, '--json', '--full-auto', '--skip-git-repo-check'];
       // Per-call reasoning effort override for background execution
       if (reasoningEffort && VALID_REASONING_EFFORTS.includes(reasoningEffort)) {
         args.push('-c', `model_reasoning_effort="${reasoningEffort}"`);

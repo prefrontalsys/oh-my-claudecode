@@ -92,7 +92,7 @@ describe('executeCodex reasoning effort', () => {
     await promise;
 
     const [, spawnArgs] = spawnMock.mock.calls[0];
-    expect(spawnArgs).toEqual(['exec', '-m', 'gpt-5.3-codex', '--json', '--full-auto']);
+    expect(spawnArgs).toEqual(['exec', '-m', 'gpt-5.3-codex', '--json', '--full-auto', '--skip-git-repo-check']);
     expect(spawnArgs).not.toContain('-c');
   });
 
@@ -133,6 +133,14 @@ describe('executeCodex reasoning effort', () => {
 
     const [, spawnArgs] = spawnMock.mock.calls[0];
     expect(spawnArgs).not.toContain('-c');
+  });
+
+  it('should always include --skip-git-repo-check to support untrusted directories', async () => {
+    setupSpawnMock();
+    await executeCodex('test prompt', 'gpt-5.3-codex');
+
+    const [, spawnArgs] = spawnMock.mock.calls[0];
+    expect(spawnArgs).toContain('--skip-git-repo-check');
   });
 });
 
