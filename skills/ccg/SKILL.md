@@ -28,92 +28,84 @@ CCG spawns a tmux team with Codex and Gemini CLI workers running in parallel pan
    - Backend/analytical tasks → Codex worker
    - Frontend/UI/design tasks → Gemini worker
 
-2. startTeam() creates a tmux session with 2 workers:
+2. mcp__team__omc_run_team_start creates a tmux session with 2 workers:
    omc-team-{name}
    ├── Leader pane (Claude orchestrates)
    ├── Worker pane 1: codex CLI (analytical tasks)
    └── Worker pane 2: gemini CLI (design tasks)
 
-3. Tasks assigned to workers via inbox files + tmux triggers
+3. Workers read tasks from inbox files and write done.json on completion
 
-4. Workers claim tasks, execute, write results to task files
+4. mcp__team__omc_run_team_wait blocks until all workers finish
 
-5. Claude reads results and synthesizes into final output
-
-6. Team shut down cleanly
+5. Claude reads taskResults and synthesizes into final output
 ```
 
 ## Execution Protocol
 
 When invoked, Claude MUST follow this workflow:
 
-### 1. Check CLI Availability
-```typescript
-import { isCliAvailable } from './src/team/model-contract.js';
-const hasCodex = isCliAvailable('codex');
-const hasGemini = isCliAvailable('gemini');
-```
-
-If neither is available: fall back to Claude Task agents directly (no tmux team needed).
-
-### 2. Decompose Request
+### 1. Decompose Request
 Split the user's request into:
 - **Codex tasks**: code analysis, architecture review, backend logic, security review, test strategy
 - **Gemini tasks**: UI/UX design, documentation, visual analysis, large-context file review
 - **Synthesis task**: Claude combines results (always done by Claude, not delegated)
 
-### 3. Start Team
-```typescript
-import { startTeam } from './src/team/runtime.js';
+Choose a short `teamName` slug (e.g., `ccg-auth-review`).
 
-const runtime = await startTeam({
-  teamName: 'ccg-' + Date.now(),
-  workerCount: 2,
-  agentTypes: ['codex', 'gemini'],
-  tasks: [...codexTasks, ...geminiTasks],
-  cwd: process.cwd(),
-});
+### 2. Start the team (non-blocking)
+
+Call `mcp__team__omc_run_team_start` — spawns workers in the background and returns a `jobId` immediately:
+
+```
+mcp__team__omc_run_team_start({
+  "teamName": "ccg-{slug}",
+  "agentTypes": ["codex", "gemini"],
+  "tasks": [
+    {"subject": "Codex task: ...", "description": "Full description of analytical work..."},
+    {"subject": "Gemini task: ...", "description": "Full description of design/UI work..."}
+  ],
+  "cwd": "{cwd}",
+  "timeoutSeconds": 300
+})
 ```
 
-### 4. Assign Tasks
-```typescript
-import { assignTask } from './src/team/runtime.js';
+Returns: `{ "jobId": "omc-...", "pid": 12345, "message": "Team started in background..." }`
 
-// Assign codex tasks to worker-1, gemini tasks to worker-2
-for (const task of codexTasks) {
-  await assignTask(runtime.teamName, task.id, 'worker-1',
-    runtime.workerPaneIds[0], runtime.sessionName, runtime.cwd);
+### 3. Wait for completion
+
+Call `mcp__team__omc_run_team_wait` — blocks internally until done:
+
+```
+mcp__team__omc_run_team_wait({
+  "job_id": "{jobId}",
+  "timeout_ms": 60000
+})
+```
+
+> **Timeout guidance:** Use `60000` (60 s) as default. On timeout, workers keep running.
+> Call `omc_run_team_wait` again to keep waiting, or `omc_run_team_cleanup` to cancel.
+
+Returns when done:
+```json
+{
+  "status": "completed|failed|timeout",
+  "result": {
+    "taskResults": [
+      {"taskId": "1", "status": "completed", "summary": "..."},
+      {"taskId": "2", "status": "completed", "summary": "..."}
+    ]
+  }
 }
-for (const task of geminiTasks) {
-  await assignTask(runtime.teamName, task.id, 'worker-2',
-    runtime.workerPaneIds[1], runtime.sessionName, runtime.cwd);
-}
 ```
 
-### 5. Monitor Until Complete
-```typescript
-import { monitorTeam } from './src/team/runtime.js';
+### 4. Synthesize Results
 
-let phase = 'executing';
-while (phase !== 'completed' && phase !== 'failed') {
-  await new Promise(r => setTimeout(r, 5000)); // poll every 5s
-  const snapshot = await monitorTeam(runtime.teamName, runtime.cwd, runtime.workerPaneIds);
-  phase = snapshot.phase;
-}
-```
-
-### 6. Read Results & Synthesize
-Read task files from `.omc/state/team/{teamName}/tasks/` and synthesize.
-
-### 7. Shutdown
-```typescript
-import { shutdownTeam } from './src/team/runtime.js';
-await shutdownTeam(runtime.teamName, runtime.sessionName, runtime.cwd);
-```
+Parse `result.taskResults` and synthesize Codex + Gemini outputs into a unified response for the user.
 
 ## Fallback (CLIs Not Available)
 
-When Codex or Gemini CLI is not installed:
+CLI availability is checked by the MCP runtime automatically. If a CLI is not installed, the worker exits with `command not found`. In that case, fall back to Claude Task agents:
 
 ```
 [CCG] Codex/Gemini CLI not found. Falling back to Claude-only execution.
